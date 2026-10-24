@@ -1,0 +1,49 @@
+name: daily-post
+
+on:
+  schedule:
+    - cron: "52 21 * * *"   # 매일 한국시간 오전 6:52 (UTC 21:52)
+  workflow_dispatch:         # Actions 탭에서 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 한글 폰트 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+
+      - run: pip install -r requirements.txt
+
+      - name: 뉴스 수집 + 원고 + 카드 생성
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python main.py build
+
+      - name: 카드 이미지 업로드 (공개 주소 만들기)
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output data
+          git commit -m "cards $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git push
+
+      - name: 인스타그램 게시
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: python main.py publish
+
+      - name: 게시 기록 저장
+        run: |
+          git add output
+          git commit -m "published $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git push

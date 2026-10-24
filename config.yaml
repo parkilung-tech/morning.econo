@@ -1,0 +1,36 @@
+# ===== 계정 콘셉트 =====
+account_name: "오늘의 경제 3분 브리핑"   # 카드 상단에 들어갈 브랜드명
+handle: "@your_handle"                 # 인스타 아이디 (마지막 카드에 표시)
+topic: "경제"                           # Claude가 기사 고를 때 기준이 되는 주제
+
+# ===== 뉴스 수집 =====
+# 구글 뉴스 검색어 (한국어 그대로 써도 됨)
+google_news_queries:
+  - "경제"
+  - "금리"
+  - "부동산 시장"
+# 추가 RSS 주소 (선택)
+extra_feeds:
+  - "https://www.yna.co.kr/rss/economy.xml"
+lookback_hours: 24        # 최근 몇 시간 기사만 볼지
+max_candidates: 30        # Claude에게 넘길 후보 기사 수
+news_per_post: 5          # 한 게시물에 담을 뉴스 개수 (카드 = 표지 + N + 마무리)
+
+# ===== AI =====
+model: "claude-sonnet-5-5"
+
+# ===== 디자인 =====
+theme:
+  background: "#0F172A"
+  card: "#1E293B"
+  accent: "#38BDF8"
+  text: "#F8FAFC"
+  subtext: "#94A3B8"
+font_path: "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
+font_regular_path: "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+font_index: 1             # NotoSansCJK .ttc 안의 한국어(KR) 서체 번호
+
+# ===== 인스타그램 =====
+graph_api_version: "v25.0"
+# 이미지가 올라갈 공개 주소. {repo}는 GitHub Actions가 자동으로 채움
+image_base_url: "https://raw.githubusercontent.com/{repo}/main/output"
