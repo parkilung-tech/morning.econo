@@ -1,5 +1,6 @@
 """Claude로 기사 선별 + 카드뉴스 원고 + 캡션 작성."""
 import json
+import json_repair
 import re
 from datetime import datetime, timezone, timedelta
 
@@ -35,7 +36,7 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 def _extract_json(text: str) -> dict:
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
     start, end = text.find("{"), text.rfind("}")
-    return json.loads(text[start : end + 1])
+    return json_repair.loads(text[start : end + 1])
 
 
 def write_script(cfg: dict, articles: list[dict]) -> dict:
