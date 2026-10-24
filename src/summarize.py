@@ -57,7 +57,7 @@ def write_script(cfg: dict, articles: list[dict]) -> dict:
             messages=[{"role": "user", "content": prompt}],
         )
         try:
-            data = _extract_json(msg.content[0].text)
+            data = _extract_json(next(b.text for b in msg.content if b.type == "text"))
             data["items"] = data["items"][: cfg["news_per_post"]]
             data["date"] = datetime.now(KST).strftime("%Y.%m.%d")
             return data
