@@ -42,13 +42,30 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
         run: python main.py publish
 
-      # 릴스가 실패해도 카드뉴스 게시와 기록 저장은 그대로 진행
+      # ----- 릴스 (실패해도 카드뉴스 게시와 기록 저장은 그대로 진행) -----
+      - name: 릴스 영상 만들기
+        id: reel_build
+        continue-on-error: true
+        run: python main.py reel-build
+
+      - name: 릴스 영상 업로드 (공개 주소 만들기)
+        id: reel_push
+        if: steps.reel_build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          git add output
+          git commit -m "reel $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: 릴스 게시
+        if: steps.reel_push.outcome == 'success'
         continue-on-error: true
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
-        run: python main.py reel
+          REEL_SHA: ${{ steps.reel_push.outputs.sha }}
+        run: python main.py reel-publish
 
       - name: 게시 기록 저장
         run: |

@@ -2,7 +2,8 @@
 사용법
   python main.py build     # 뉴스 수집 → 원고 작성 → 카드 이미지 생성 (게시 X)
   python main.py publish   # build로 만든 오늘 게시물을 인스타에 올림
-  python main.py reel      # 오늘 카드로 릴스 영상을 만들어 인스타에 올림
+  python main.py reel-build    # 오늘 카드로 릴스 영상(reel.mp4) 만들기
+  python main.py reel-publish  # 저장소에 올라간 reel.mp4를 릴스로 게시
   python main.py sample    # API 키 없이 샘플 원고로 카드만 만들어보기
 """
 import json
@@ -68,23 +69,54 @@ def publish():
     print(f"게시 완료: {media_id}")
 
 
-def reel():
-    """오늘 카드 이미지로 릴스 영상을 만들어 게시 (카드뉴스 게시 뒤에 실행)."""
+def _reel_todo():
+    """릴스를 올려야 하면 post를, 아니면 None을 돌려줌."""
     if not CFG.get("reel_enabled", True):
         print("릴스 꺼져 있음 (config.yaml reel_enabled)")
-        return
-    from src.publish import Instagram
-    from src.reel import make_reel
-
+        return None
     post = json.loads((OUT / "post.json").read_text(encoding="utf-8"))
     if post.get("reel_id"):
         print("릴스 이미 게시됨, 건너뜀")
+        return None
+    return post
+
+
+def reel_build():
+    """오늘 카드 이미지로 릴스 영상(output/날짜/reel.mp4) 생성."""
+    post = _reel_todo()
+    if not post:
         return
+    from src.reel import make_reel
+
     images = [OUT / name for name in post["images"]]
-    video = make_reel(CFG, images, OUT / "reel.mp4", datetime.now(KST).date())
+    make_reel(CFG, images, OUT / "reel.mp4", datetime.now(KST).date())
+
+
+def reel_publish():
+    """저장소에 올라간 reel.mp4를 공개 주소로 넘겨 릴스 게시."""
+    post = _reel_todo()
+    if not post:
+        return
+    if not (OUT / "reel.mp4").exists():
+        raise RuntimeError("reel.mp4가 없음 (reel-build 먼저 실행)")
+    from src.publish import Instagram
+
+    # jsDelivr는 GitHub 공개 저장소 파일을 video/mp4 형식으로 내보내줌.
+    # 커밋 번호(REEL_SHA)를 주소에 넣어 캐시된 옛 파일이 나가지 않게 함.
+    repo = os.environ["GITHUB_REPOSITORY"]
+    sha = os.environ.get("REEL_SHA", "main")
+    url = f"https://cdn.jsdelivr.net/gh/{repo}@{sha}/output/{TODAY}/reel.mp4"
+    for _ in range(12):
+        r = requests.head(url, timeout=15, allow_redirects=True)
+        if r.status_code == 200:
+            break
+        time.sleep(10)
+    else:
+        raise RuntimeError(f"영상 주소 접근 불가: {url}")
+    print(f"영상 주소: {url} ({r.headers.get('content-type')})")
 
     ig = Instagram(CFG["graph_api_version"])
-    reel_id = ig.publish_reel(str(video), post["caption_full"], CFG.get("reel_share_to_feed", False))
+    reel_id = ig.publish_reel(url, post["caption_full"], CFG.get("reel_share_to_feed", False))
     post["reel_id"] = reel_id
     (OUT / "post.json").write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"릴스 게시 완료: {reel_id}")
@@ -98,4 +130,5 @@ def sample():
 
 
 if __name__ == "__main__":
-    {"build": build, "publish": publish, "reel": reel, "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()
+    {"build": build, "publish": publish, "reel-build": reel_build,
+     "reel-publish": reel_publish, "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()
