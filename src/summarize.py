@@ -8,8 +8,16 @@ import anthropic
 
 KST = timezone(timedelta(hours=9))
 
+TASK_DAILY = "아래 후보 기사 중 직장인이 오늘 꼭 알아야 할 뉴스 {n}개를 골라 카드뉴스 원고를 만들어."
+TASK_WEEKLY = """오늘은 '이번 주 경제 총정리' 날이야.
+아래는 이번 주에 우리가 이미 다룬 뉴스와 오늘 새로 나온 기사야. 이 중 이번 주 흐름을 이해하는 데
+가장 중요한 뉴스 {n}개를 골라 총정리 카드뉴스 원고를 만들어.
+- 같은 주제가 여러 날 나왔으면 하나로 묶어서 '이번 주에 어떻게 흘러갔는지'를 써.
+- points의 마지막 항목은 '다음 주에 지켜볼 것' 관점으로 써.
+- caption 첫 줄은 '이번 주 경제, 이것만 기억하세요' 같은 총정리 훅으로, 저장 유도를 꼭 넣어."""
+
 PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는 '{topic}'.
-아래 후보 기사 중 직장인이 오늘 꼭 알아야 할 뉴스 {n}개를 골라 카드뉴스 원고를 만들어.
+{task}
 
 규칙:
 - 기사 문장을 그대로 베끼지 말고 반드시 네 말로 다시 써. (저작권)
@@ -80,7 +88,7 @@ def _validate(data: dict, n: int) -> dict:
 
     # 표지 제목이 비었거나 계정명 같은 일반 문구면 첫 뉴스 헤드라인으로 대체
     title = str(data.get("cover_title") or "").strip()
-    generic = ("경제 한 잔", "경제한잔", "오늘의 경제", "오늘의 뉴스", "꼭 알아야 할", "요일")
+    generic = ("경제 한 잔", "경제한잔", "오늘의 경제", "오늘의 뉴스", "꼭 알아야 할", "요일", "총정리", "이번 주 경제")
     if not title or any(g in title for g in generic):
         title = data["items"][0]["headline"]
     data["cover_title"] = title
@@ -101,19 +109,28 @@ def _validate(data: dict, n: int) -> dict:
     return data
 
 
-def write_script(cfg: dict, articles: list[dict]) -> dict:
-    if not articles:
+def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None = None) -> dict:
+    """week_items가 있으면 '이번 주 총정리' 원고, 없으면 평소 원고."""
+    if not articles and not week_items:
         raise RuntimeError("새 기사가 없어서 오늘은 건너뜁니다.")
     listing = "\n".join(
         f"{i+1}. [{a['source']}] {a['title']}\n   {re.sub('<[^>]+>', '', a['summary'])}"
         for i, a in enumerate(articles)
     )
+    if week_items:
+        past = "\n".join(
+            f"- ({it['day']}) [{it.get('tag', '')}] {it['headline']}: {' / '.join(it.get('points', []))}"
+            f" (출처 {it.get('source', '')})"
+            for it in week_items
+        )
+        listing = f"[이번 주에 이미 다룬 뉴스]\n{past}\n\n[오늘 새 기사]\n{listing or '(없음)'}"
     now = datetime.now(KST)
     # %a는 서버에서 영어(Sun)로 나와서, 한글 요일을 직접 붙임
     today = now.strftime("%Y년 %m월 %d일 ") + "월화수목금토일"[now.weekday()] + "요일"
     n = cfg["news_per_post"]
+    task = (TASK_WEEKLY if week_items else TASK_DAILY).format(n=n)
     prompt = PROMPT.format(
-        account=cfg["account_name"], topic=cfg["topic"], n=n,
+        account=cfg["account_name"], topic=cfg["topic"], task=task,
         date=today, articles=listing,
     )
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수 사용
@@ -133,7 +150,12 @@ def write_script(cfg: dict, articles: list[dict]) -> dict:
             continue
         try:
             data = _validate(_extract_json(text), n)
-            data["date"] = datetime.now(KST).strftime("%Y.%m.%d")
+            data["date"] = now.strftime("%Y.%m.%d")
+            if week_items:
+                monday = now - timedelta(days=now.weekday())
+                data["weekly"] = True
+                data["date"] = f"{monday:%Y.%m.%d} – {now:%m.%d}"
+                data["cover_subtitle"] = f"이번 주 경제 총정리 · {len(data['items'])}가지"
             return data
         except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             last_error = e

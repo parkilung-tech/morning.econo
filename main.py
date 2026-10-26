@@ -24,6 +24,28 @@ TODAY = datetime.now(KST).strftime("%Y-%m-%d")
 OUT = Path("output") / TODAY
 
 
+def is_recap_day() -> bool:
+    day = CFG.get("weekly_recap_day") or ""
+    return bool(day) and "월화수목금토일"[datetime.now(KST).weekday()] == day
+
+
+def this_week_items() -> list[dict]:
+    """이번 주 월요일~어제 게시한 뉴스 목록 (금요일 총정리 재료)."""
+    now = datetime.now(KST).date()
+    items = []
+    for i in range(now.weekday(), 0, -1):
+        day = now - timedelta(days=i)
+        path = Path("output") / day.isoformat() / "post.json"
+        if not path.exists():
+            continue
+        post = json.loads(path.read_text(encoding="utf-8"))
+        if not post.get("published_id"):
+            continue
+        for it in post.get("items", []):
+            items.append({**it, "day": f"{day:%m/%d}"})
+    return items
+
+
 def build():
     from src import fetch_news, summarize
 
@@ -35,7 +57,10 @@ def build():
 
     articles = fetch_news.fetch(CFG)
     print(f"후보 기사 {len(articles)}건")
-    script = summarize.write_script(CFG, articles)
+    week_items = this_week_items() if is_recap_day() else []
+    if week_items:
+        print(f"이번 주 총정리: 이번 주 뉴스 {len(week_items)}건 + 오늘 기사")
+    script = summarize.write_script(CFG, articles, week_items)
     paths = render.render_all(CFG, script, OUT)
     script["caption_full"] = summarize.build_caption(script)
     script["images"] = [p.name for p in paths]
@@ -96,11 +121,8 @@ def reel_build():
     from src.reel import make_reel
 
     images = [OUT / name for name in post["images"]]
-    # 첫 장면 색을 카드와 똑같이 맞추려고, 카드를 만든 날짜(post.json의 date)로 요일 색을 고름
-    try:
-        day = datetime.strptime(post["date"], "%Y.%m.%d").date()
-    except (KeyError, ValueError):
-        day = datetime.now(KST).date()
+    # 첫 장면 색을 카드와 똑같이 맞추려고, 카드를 만든 날짜로 요일 색을 고름
+    day = datetime.strptime(OUT.name, "%Y-%m-%d").date()  # output/날짜 폴더 = 카드 만든 날
     make_reel(CFG, images, OUT / "reel.mp4", day, post)
 
 

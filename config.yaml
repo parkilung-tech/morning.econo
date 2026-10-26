@@ -15,6 +15,7 @@ extra_feeds:
 lookback_hours: 24        # 최근 몇 시간 기사만 볼지
 max_candidates: 30        # Claude에게 넘길 후보 기사 수
 news_per_post: 5          # 한 게시물에 담을 뉴스 개수 (카드 = 표지 + N + 마무리)
+weekly_recap_day: "금"    # 이 요일엔 '이번 주 총정리'로 게시. 끄려면 "" (빈칸)
 
 # ===== AI =====
 model: "claude-sonnet-5-5"

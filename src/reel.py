@@ -23,11 +23,14 @@ def make_hook(cfg: dict, post: dict, out: Path, day: date) -> Path:
     d.rectangle([0, 0, W, 16], fill=t["accent"])
     # 인스타 릴스 화면은 위쪽 약 250px, 아래쪽 약 450px가 버튼·캡션에 가려져서 그 사이에 배치
     d.text((pad, 300), cfg["account_name"], font=p.font(40), fill=t["accent"])
-    date_txt = f"{day.strftime('%m.%d')} {WEEKDAYS[day.weekday()]}요일 경제뉴스"
-    d.text((pad, 560), date_txt, font=p.font(46, bold=False), fill=t["subtext"])
+    if post.get("weekly"):
+        d.text((pad, 560), "이번 주 경제 총정리", font=p.font(52), fill=t["accent"])
+    else:
+        date_txt = f"{day.strftime('%m.%d')} {WEEKDAYS[day.weekday()]}요일 경제뉴스"
+        d.text((pad, 560), date_txt, font=p.font(46, bold=False), fill=t["subtext"])
     y = p.block(d, (pad, 650), post["cover_title"], p.font(132), t["text"], W - 2 * pad, 1.18)
     d.rectangle([pad, y + 30, pad + 160, y + 44], fill=t["accent"])
-    if post.get("cover_subtitle"):
+    if post.get("cover_subtitle") and not post.get("weekly"):
         p.block(d, (pad, y + 100), post["cover_subtitle"], p.font(54, bold=False), t["subtext"], W - 2 * pad)
     d.text((pad, 1380), cfg["handle"], font=p.font(40, bold=False), fill=t["subtext"])
     img.save(out, "JPEG", quality=92)
