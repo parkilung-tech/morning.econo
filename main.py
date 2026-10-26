@@ -26,6 +26,12 @@ OUT = Path("output") / TODAY
 def build():
     from src import fetch_news, summarize
 
+    # 이미 오늘 게시했으면 다시 만들지 않음 (다시 실행해도 중복 게시 방지)
+    existing = OUT / "post.json"
+    if existing.exists() and json.loads(existing.read_text(encoding="utf-8")).get("published_id"):
+        print("오늘 카드뉴스는 이미 게시됨, 새로 만들지 않음")
+        return
+
     articles = fetch_news.fetch(CFG)
     print(f"후보 기사 {len(articles)}건")
     script = summarize.write_script(CFG, articles)
