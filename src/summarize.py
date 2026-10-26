@@ -20,6 +20,7 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 - source는 언론사 이름.
 - caption은 3~5줄, 첫 줄은 궁금증을 일으키는 훅. 끝에 '저장해두고 출근길에 보세요' 같은 저장 유도 한 줄. 줄바꿈은 \\n으로 표시.
 - hashtags는 12~15개, '#' 포함, 대형/중형/소형 태그 섞기.
+- 요일을 언급할 때는 아래 '오늘 날짜'의 요일만 써. 다른 요일(예: 내일, 다음 출근일)을 짐작해서 쓰지 마.
 - 중요: 모든 문자열 값 안에는 큰따옴표를 절대 쓰지 마. 인용이 필요하면 작은따옴표(')나 「」를 써.
 
 오늘 날짜: {date}
@@ -96,7 +97,9 @@ def write_script(cfg: dict, articles: list[dict]) -> dict:
         f"{i+1}. [{a['source']}] {a['title']}\n   {re.sub('<[^>]+>', '', a['summary'])}"
         for i, a in enumerate(articles)
     )
-    today = datetime.now(KST).strftime("%Y년 %m월 %d일 (%a)")
+    now = datetime.now(KST)
+    # %a는 서버에서 영어(Sun)로 나와서, 한글 요일을 직접 붙임
+    today = now.strftime("%Y년 %m월 %d일 ") + "월화수목금토일"[now.weekday()] + "요일"
     n = cfg["news_per_post"]
     prompt = PROMPT.format(
         account=cfg["account_name"], topic=cfg["topic"], n=n,

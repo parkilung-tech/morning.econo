@@ -20,12 +20,51 @@ news_per_post: 5          # 한 게시물에 담을 뉴스 개수 (카드 = 표�
 model: "claude-sonnet-5-5"
 
 # ===== 디자인 =====
-theme:
-  background: "#0F172A"
-  card: "#1E293B"
-  accent: "#38BDF8"
-  text: "#F8FAFC"
-  subtext: "#94A3B8"
+# 요일별 색상 (한국 시간 기준). 색을 바꾸고 싶으면 아래 값만 고치면 돼요.
+# background=전체 배경, card=요점 박스, accent=번호·강조색, text=제목·본문, subtext=날짜·출처
+themes:
+  월:  # 네이비 (기존 색)
+    background: "#0F172A"
+    card: "#1E293B"
+    accent: "#38BDF8"
+    text: "#F8FAFC"
+    subtext: "#94A3B8"
+  화:  # 포레스트 그린
+    background: "#0F2A24"
+    card: "#173B33"
+    accent: "#4FD1A5"
+    text: "#F0FDF4"
+    subtext: "#9DBFB3"
+  수:  # 플럼
+    background: "#221637"
+    card: "#30214A"
+    accent: "#C4A1FF"
+    text: "#FAF5FF"
+    subtext: "#B5A6CC"
+  목:  # 버건디
+    background: "#2B1117"
+    card: "#3D1A22"
+    accent: "#FF8F85"
+    text: "#FFF5F5"
+    subtext: "#C9A3A8"
+  금:  # 차콜 + 골드
+    background: "#1A1916"
+    card: "#2A2823"
+    accent: "#F6C453"
+    text: "#FFFBEB"
+    subtext: "#B3AB98"
+  토:  # 크림 (밝은 톤)
+    background: "#F6F1E7"
+    card: "#EAE2D2"
+    accent: "#A33C09"
+    text: "#1C1917"
+    subtext: "#6B6157"
+  일:  # 스카이 (밝은 톤)
+    background: "#E8F1FB"
+    card: "#D6E4F5"
+    accent: "#1D56C9"
+    text: "#0F172A"
+    subtext: "#55657D"
 font_path: "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
 font_regular_path: "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
 font_index: 1             # NotoSansCJK .ttc 안의 한국어(KR) 서체 번호
@@ -34,3 +73,9 @@ font_index: 1             # NotoSansCJK .ttc 안의 한국어(KR) 서체 번호
 graph_api_version: "v25.0"
 # 이미지가 올라갈 공개 주소. {repo}는 GitHub Actions가 자동으로 채움
 image_base_url: "https://raw.githubusercontent.com/{repo}/main/output"
+
+# ===== 릴스 =====
+reel_enabled: true          # false로 바꾸면 릴스는 안 올림
+reel_seconds_per_card: 3    # 카드 한 장당 보여줄 초
+reel_bgm_dir: "assets/bgm"  # 저작권 없는 음원(mp3)을 넣는 폴더. 비어 있으면 무음
+reel_share_to_feed: false   # true면 피드 그리드에도 노출 (카드뉴스와 겹쳐 보임)

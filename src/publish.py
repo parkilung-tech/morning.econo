@@ -41,6 +41,26 @@ class Instagram:
         ).json()
         return r
 
+    def publish_reel(self, video_path: str, caption: str, share_to_feed=False) -> str:
+        """영상 파일을 직접 업로드(resumable)해서 릴스로 게시. 영상 공개 주소가 필요 없음."""
+        c = self._post(
+            f"{self.user_id}/media",
+            media_type="REELS", upload_type="resumable", caption=caption,
+            share_to_feed="true" if share_to_feed else "false",
+        )
+        size = os.path.getsize(video_path)
+        with open(video_path, "rb") as f:
+            r = requests.post(c["uri"], headers={
+                "Authorization": f"OAuth {self.token}",
+                "offset": "0",
+                "file_size": str(size),
+            }, data=f, timeout=300)
+        if not r.ok:
+            raise RuntimeError(f"영상 업로드 오류 {r.status_code}: {r.text}")
+        self._wait_ready(c["id"], tries=60)  # 영상은 인스타 쪽 처리에 1~3분 걸림
+        res = self._post(f"{self.user_id}/media_publish", creation_id=c["id"])
+        return res["id"]
+
     def publish_carousel(self, image_urls: list[str], caption: str) -> str:
         children = []
         for url in image_urls:

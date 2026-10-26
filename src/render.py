@@ -1,15 +1,25 @@
 """카드뉴스 이미지(1080x1350, 4:5) 생성."""
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1080, 1350
 PAD = 90
+KST = timezone(timedelta(hours=9))
+WEEKDAYS = "월화수목금토일"
+
+
+def pick_theme(cfg: dict, day: date | None = None) -> dict:
+    """오늘(한국 시간) 요일에 맞는 색상. 요일 색이 없으면 기존 theme 사용."""
+    day = day or datetime.now(KST).date()
+    themes = cfg.get("themes") or {}
+    return themes.get(WEEKDAYS[day.weekday()]) or cfg["theme"]
 
 
 class Painter:
-    def __init__(self, cfg: dict):
-        t = cfg["theme"]
+    def __init__(self, cfg: dict, day: date | None = None):
+        t = pick_theme(cfg, day)
         self.bg, self.card, self.accent = t["background"], t["card"], t["accent"]
         self.text, self.sub = t["text"], t["subtext"]
         self.bold_path = cfg["font_path"]
@@ -122,9 +132,9 @@ class Painter:
         return img
 
 
-def render_all(cfg: dict, script: dict, out_dir: Path) -> list[Path]:
+def render_all(cfg: dict, script: dict, out_dir: Path, day: date | None = None) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    p = Painter(cfg)
+    p = Painter(cfg, day)
     total = len(script["items"]) + 2
     images = [p.cover(script, total)]
     images += [p.item(it, i, i + 1, total) for i, it in enumerate(script["items"], 1)]
