@@ -96,7 +96,12 @@ def reel_build():
     from src.reel import make_reel
 
     images = [OUT / name for name in post["images"]]
-    make_reel(CFG, images, OUT / "reel.mp4", datetime.now(KST).date(), post)
+    # 첫 장면 색을 카드와 똑같이 맞추려고, 카드를 만든 날짜(post.json의 date)로 요일 색을 고름
+    try:
+        day = datetime.strptime(post["date"], "%Y.%m.%d").date()
+    except (KeyError, ValueError):
+        day = datetime.now(KST).date()
+    make_reel(CFG, images, OUT / "reel.mp4", day, post)
 
 
 def reel_publish():
