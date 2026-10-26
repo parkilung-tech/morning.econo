@@ -1,0 +1,52 @@
+name: daily-reel
+
+# 아침 카드뉴스와 겹치지 않게 점심 시간에 릴스를 따로 올림 (하루 노출 두 번)
+on:
+  schedule:
+    - cron: "23 3 * * *"   # 매일 한국시간 낮 12:23 (UTC 03:23)
+  workflow_dispatch:        # Actions 탭에서 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 한글 폰트 + 영상 도구 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk ffmpeg
+
+      - run: pip install -r requirements.txt
+
+      - name: 릴스 영상 만들기
+        run: python main.py reel-build
+
+      - name: 릴스 영상 업로드 (공개 주소 만들기)
+        id: push
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output
+          git commit -m "reel $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: 릴스 게시
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          REEL_SHA: ${{ steps.push.outputs.sha }}
+        run: python main.py reel-publish
+
+      - name: 게시 기록 저장
+        if: always()
+        run: |
+          git add output
+          git commit -m "reel published $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push

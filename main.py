@@ -74,7 +74,14 @@ def _reel_todo():
     if not CFG.get("reel_enabled", True):
         print("릴스 꺼져 있음 (config.yaml reel_enabled)")
         return None
-    post = json.loads((OUT / "post.json").read_text(encoding="utf-8"))
+    path = OUT / "post.json"
+    if not path.exists():
+        print("오늘 카드뉴스가 없음, 릴스 건너뜀")
+        return None
+    post = json.loads(path.read_text(encoding="utf-8"))
+    if not post.get("published_id"):
+        print("오늘 카드뉴스가 아직 게시되지 않음, 릴스 건너뜀")
+        return None
     if post.get("reel_id"):
         print("릴스 이미 게시됨, 건너뜀")
         return None
@@ -89,7 +96,7 @@ def reel_build():
     from src.reel import make_reel
 
     images = [OUT / name for name in post["images"]]
-    make_reel(CFG, images, OUT / "reel.mp4", datetime.now(KST).date())
+    make_reel(CFG, images, OUT / "reel.mp4", datetime.now(KST).date(), post)
 
 
 def reel_publish():

@@ -77,7 +77,12 @@ class Painter:
     def cover(self, script, total):
         img, d = self.base(1, total)
         d.text((PAD, 300), script["date"], font=self.font(40, bold=False), fill=self.sub)
-        y = self.block(d, (PAD, 380), script["cover_title"], self.font(110), self.text, W - 2 * PAD, 1.2)
+        # 헤드라인이 길면 글씨를 줄여 2줄 안에 맞춤 (아래 뉴스 목록과 겹치지 않게)
+        for size in (110, 96, 84, 74):
+            tf = self.font(size)
+            if len(self.wrap(d, script["cover_title"], tf, W - 2 * PAD)) <= 2:
+                break
+        y = self.block(d, (PAD, 380), script["cover_title"], tf, self.text, W - 2 * PAD, 1.2)
         d.rectangle([PAD, y + 30, PAD + 120, y + 40], fill=self.accent)
         y = self.block(d, (PAD, y + 80), script["cover_subtitle"], self.font(46, bold=False), self.sub, W - 2 * PAD)
         # 오늘의 키워드 목록

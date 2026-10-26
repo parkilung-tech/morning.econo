@@ -17,6 +17,10 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 - headline은 18자 이내, 핵심 키워드가 앞에 오게.
 - points는 정확히 3개, 각 32자 이내. 마지막 항목은 '그래서 나한테 무슨 의미?' 관점.
 - tag는 2~4자 분야명 (예: 금리, 부동산, 증시, 환율, 산업).
+- items는 가장 임팩트 큰 뉴스를 첫 번째로 놓아.
+- cover_title은 첫 번째 뉴스의 핵심을 한 줄로 쓴 헤드라인이야. 숫자가 있으면 꼭 넣어 (예: 메타 8천 명 감원, 경상흑자 日·獨 추월).
+  계정 이름, '경제 한 잔', 요일, '오늘의 뉴스' 같은 일반적인 말은 절대 쓰지 마.
+- cover_subtitle은 나머지 뉴스를 짧게 예고 (예: 환율·GDP·AI 거품까지 4가지 더).
 - source는 언론사 이름.
 - caption은 3~5줄, 첫 줄은 궁금증을 일으키는 훅. 끝에 '저장해두고 출근길에 보세요' 같은 저장 유도 한 줄. 줄바꿈은 \\n으로 표시.
 - hashtags는 12~15개, '#' 포함, 대형/중형/소형 태그 섞기.
@@ -74,8 +78,15 @@ def _validate(data: dict, n: int) -> dict:
         raise ValueError("유효한 기사가 하나도 없음")
     data["items"] = clean[:n]
 
-    data["cover_title"] = str(data.get("cover_title") or "오늘의 경제 뉴스")
+    # 표지 제목이 비었거나 계정명 같은 일반 문구면 첫 뉴스 헤드라인으로 대체
+    title = str(data.get("cover_title") or "").strip()
+    generic = ("경제 한 잔", "경제한잔", "오늘의 경제", "오늘의 뉴스", "꼭 알아야 할", "요일")
+    if not title or any(g in title for g in generic):
+        title = data["items"][0]["headline"]
+    data["cover_title"] = title
     data["cover_subtitle"] = str(data.get("cover_subtitle") or "")
+    if not data["cover_subtitle"] and len(data["items"]) > 1:
+        data["cover_subtitle"] = f"외 {len(data['items']) - 1}가지 뉴스 정리"
 
     caption = data.get("caption")
     if not isinstance(caption, str) or not caption.strip():
