@@ -30,8 +30,9 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
   계정 이름, '경제 한 잔', 요일, '오늘의 뉴스' 같은 일반적인 말은 절대 쓰지 마.
 - cover_subtitle은 나머지 뉴스를 짧게 예고 (예: 환율·GDP·AI 거품까지 4가지 더).
 - source는 언론사 이름.
-- caption은 3~5줄, 첫 줄은 궁금증을 일으키는 훅. 끝에 '저장해두고 출근길에 보세요' 같은 저장 유도 한 줄. 줄바꿈은 \\n으로 표시.
-- hashtags는 12~15개, '#' 포함, 대형/중형/소형 태그 섞기.
+- caption은 4~6줄, 첫 줄은 궁금증을 일으키는 훅. 끝에서 두 번째 줄은 오늘 뉴스와 관련해 독자가 댓글로 답하기 쉬운 질문 한 줄 (예: 성장률 소식, 체감되시나요?). 마지막 줄은 '이 소식 필요한 동료에게 보내주세요' 같은 공유 유도 한 줄. 줄바꿈은 \\n으로 표시.
+- reel_caption은 릴스용 짧은 캡션 2줄. 첫 줄은 오늘 가장 큰 뉴스의 숫자를 넣은 훅, 둘째 줄은 댓글 질문 한 줄. 해시태그 넣지 마.
+- hashtags는 정확히 4개, '#' 포함. 오늘 뉴스 주제에 딱 맞는 것으로 대형 1개 + 중소형 3개 (예: #경제뉴스 #코스피 #금리 #재테크). 계정 태그는 자동으로 붙으니 넣지 마.
 - 요일을 언급할 때는 아래 '오늘 날짜'의 요일만 써. 다른 요일(예: 내일, 다음 출근일)을 짐작해서 쓰지 마.
 - 중요: 모든 문자열 값 안에는 큰따옴표를 절대 쓰지 마. 인용이 필요하면 작은따옴표(')나 「」를 써.
 
@@ -42,14 +43,24 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 
 아래 JSON만 출력해 (설명·코드블록 없이). 키 순서를 지켜:
 {{"cover_title": "...(14자 이내)", "cover_subtitle": "...(24자 이내)",
-  "caption": "...", "hashtags": ["#..."],
+  "caption": "...", "reel_caption": "...", "hashtags": ["#..."],
   "items": [{{"tag": "...", "headline": "...", "points": ["...","...","..."], "source": "..."}}]}}
 """
 
-DEFAULT_HASHTAGS = [
-    "#경제뉴스", "#오늘의뉴스", "#카드뉴스", "#경제공부", "#직장인",
-    "#출근길", "#재테크", "#뉴스요약", "#경제상식", "#모닝뉴스",
-]
+# 인스타는 게시물당 해시태그 최대 5개 → 주제 태그 4개 + 계정 태그 1개
+BRAND_TAG = "#출근길경제한잔"
+MAX_HASHTAGS = 5
+DEFAULT_HASHTAGS = ["#경제뉴스", "#재테크", "#직장인", "#경제공부"]
+
+
+def limit_hashtags(tags: list[str]) -> list[str]:
+    """중복 제거 후 주제 태그 4개 + 계정 태그 1개로 맞춤."""
+    out = []
+    for t in tags:
+        t = "#" + str(t).strip().lstrip("#").replace(" ", "")
+        if len(t) > 1 and t != BRAND_TAG and t not in out:
+            out.append(t)
+    return out[: MAX_HASHTAGS - 1] + [BRAND_TAG]
 
 
 def _extract_json(text: str) -> dict:
@@ -105,7 +116,12 @@ def _validate(data: dict, n: int) -> dict:
     tags = data.get("hashtags")
     if not isinstance(tags, list) or not tags:
         tags = DEFAULT_HASHTAGS
-    data["hashtags"] = [t if str(t).startswith("#") else f"#{t}" for t in map(str, tags)]
+    data["hashtags"] = limit_hashtags(tags)
+
+    reel = data.get("reel_caption")
+    if not isinstance(reel, str) or not reel.strip():
+        reel = data["caption"].split("\n")[0]
+    data["reel_caption"] = reel.replace("\\n", "\n").strip()
     return data
 
 
@@ -169,5 +185,13 @@ def build_caption(script: dict) -> str:
     parts = [script.get("caption", "").strip()]
     if sources:
         parts += ["", "📰 출처: " + ", ".join(sources)]
-    parts += ["", " ".join(script.get("hashtags", []))]
+    parts += ["", " ".join(limit_hashtags(script.get("hashtags", [])))]
     return "\n".join(parts)[:2200]  # 인스타 캡션 최대 길이
+
+
+def build_reel_caption(script: dict) -> str:
+    """릴스는 짧게: 훅 + 질문 + 카드뉴스 안내 + 해시태그 3개."""
+    reel = (script.get("reel_caption") or script.get("caption", "").split("\n")[0]).strip()
+    tags = limit_hashtags(script.get("hashtags", []))
+    tags = tags[:2] + [BRAND_TAG]
+    return "\n".join([reel, "", "5가지 뉴스 전체는 오늘 아침 카드뉴스에서 👉 @morning.econo", "", " ".join(tags)])[:2200]

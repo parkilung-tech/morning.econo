@@ -128,12 +128,17 @@ class Painter:
         d.rectangle([0, H - 140, W, H], fill=self.bg)  # 기본 하단 핸들 가리기
         y = self.block(d, (PAD, 280), "매일 아침\n3분이면 끝", self.font(110), self.text, W - 2 * PAD, 1.2)
         y = self.block(d, (PAD, y + 40), "출근 전 꼭 알아야 할 뉴스만 골라 정리해드려요.", self.font(44, bold=False), self.sub, W - 2 * PAD)
-        y += 70
-        for label in ["팔로우하고 매일 받아보기", "저장해두고 다시 보기", "필요한 친구에게 공유하기"]:
-            d.rounded_rectangle([PAD, y, W - PAD, y + 100], radius=50, fill=self.card)
-            d.text((PAD + 50, y + 22), label, font=self.font(40), fill=self.text)
-            y += 125
-        d.text((PAD, y + 40), self.handle, font=self.font(56), fill=self.accent)
+        y += 80
+        # CTA는 하나로 집중: 동료에게 보내기(DM 공유)가 노출에 가장 크게 작용
+        d.rounded_rectangle([PAD, y, W - PAD, y + 130], radius=65, fill=self.accent)
+        label = "이 뉴스, 필요한 동료에게 보내기"
+        lf = self.font(46)
+        d.text(((W - d.textlength(label, font=lf)) / 2, y + 34), label, font=lf, fill=self.bg)
+        y += 130 + 50
+        sub = "팔로우하면 매일 아침 7시 전에 도착해요"
+        sf = self.font(36, bold=False)
+        d.text(((W - d.textlength(sub, font=sf)) / 2, y), sub, font=sf, fill=self.sub)
+        d.text((PAD, y + 110), self.handle, font=self.font(56), fill=self.accent)
         return img
 
 

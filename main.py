@@ -150,7 +150,8 @@ def reel_publish():
     print(f"영상 주소: {url} ({r.headers.get('content-type')})")
 
     ig = Instagram(CFG["graph_api_version"])
-    reel_id = ig.publish_reel(url, post["caption_full"], CFG.get("reel_share_to_feed", False))
+    from src.summarize import build_reel_caption
+    reel_id = ig.publish_reel(url, build_reel_caption(post), CFG.get("reel_share_to_feed", False))
     post["reel_id"] = reel_id
     (OUT / "post.json").write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"릴스 게시 완료: {reel_id}")
