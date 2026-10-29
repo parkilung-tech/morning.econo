@@ -25,11 +25,11 @@ def save_seen(links: list[str]) -> None:
     SEEN_PATH.write_text(json.dumps(seen, ensure_ascii=False), encoding="utf-8")
 
 
-def fetch(cfg: dict) -> list[dict]:
+def fetch(cfg: dict, lookback_hours: float | None = None, skip_seen: bool = True) -> list[dict]:
     urls = [_google_news_url(q) for q in cfg.get("google_news_queries", [])]
     urls += cfg.get("extra_feeds", [])
-    cutoff = time.time() - cfg.get("lookback_hours", 24) * 3600
-    seen = _load_seen()
+    cutoff = time.time() - (lookback_hours or cfg.get("lookback_hours", 24)) * 3600
+    seen = _load_seen() if skip_seen else set()
 
     articles, titles = [], set()
     for url in urls:

@@ -4,6 +4,8 @@
   python main.py publish   # build로 만든 오늘 게시물을 인스타에 올림
   python main.py reel-build    # 오늘 카드로 릴스 영상(reel.mp4) 만들기
   python main.py reel-publish  # 저장소에 올라간 reel.mp4를 릴스로 게시
+  python main.py evening-build    # 저녁: 오늘 가장 큰 이슈 1개를 한 장으로 (evening.jpg)
+  python main.py evening-publish  # 저녁 한 장을 오후 6시에 게시
   python main.py sample    # API 키 없이 샘플 원고로 카드만 만들어보기
 """
 import json
@@ -157,6 +159,63 @@ def reel_publish():
     print(f"릴스 게시 완료: {reel_id}")
 
 
+def evening_build():
+    """오늘 가장 이슈가 된 뉴스 1개 → output/날짜/evening.jpg + evening.json."""
+    if not CFG.get("evening_enabled", True):
+        print("저녁 게시 꺼져 있음 (config.yaml evening_enabled)")
+        return
+    path = OUT / "evening.json"
+    if path.exists() and json.loads(path.read_text(encoding="utf-8")).get("published_id"):
+        print("오늘 저녁 게시물은 이미 게시됨")
+        return
+    from src import evening, fetch_news
+
+    # 아침에 이미 본 기사도 다시 봐야 '오늘 가장 큰 이슈'를 고를 수 있어서 seen 필터는 끔
+    articles = fetch_news.fetch({**CFG, "max_candidates": 40}, lookback_hours=14, skip_seen=False)
+    print(f"저녁 후보 기사 {len(articles)}건")
+    morning = OUT / "post.json"
+    items = json.loads(morning.read_text(encoding="utf-8")).get("items", []) if morning.exists() else []
+    post = evening.write(CFG, articles, items)
+    evening.render(CFG, post, OUT / "evening.jpg")
+    post["caption_full"] = evening.caption(post)
+    OUT.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"저녁 이슈: {post['title']} → {OUT / 'evening.jpg'}")
+
+
+def evening_publish():
+    path = OUT / "evening.json"
+    if not path.exists():
+        print("오늘 저녁 게시물이 없음, 건너뜀")
+        return
+    post = json.loads(path.read_text(encoding="utf-8"))
+    if post.get("published_id"):
+        print("이미 게시됨, 건너뜀")
+        return
+    # 예약 실행이 조금 일찍 시작돼도 정확히 오후 6시에 올라가게 기다림 (최대 30분)
+    target = datetime.now(KST).replace(hour=CFG.get("evening_hour", 18), minute=0, second=0, microsecond=0)
+    wait = (target - datetime.now(KST)).total_seconds()
+    if 0 < wait <= 1800:
+        print(f"오후 {target:%H:%M}까지 {wait / 60:.0f}분 대기")
+        time.sleep(wait)
+
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    base = CFG["image_base_url"].format(repo=repo).rstrip("/")
+    url = f"{base}/{TODAY}/evening.jpg"
+    for _ in range(12):
+        if requests.head(url, timeout=15).status_code == 200:
+            break
+        time.sleep(10)
+    else:
+        raise RuntimeError(f"이미지 주소 접근 불가: {url}")
+
+    from src.publish import Instagram
+    ig = Instagram(CFG["graph_api_version"])
+    post["published_id"] = ig.publish_image(url, post["caption_full"])
+    path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"저녁 게시 완료: {post['published_id']}")
+
+
 def sample():
     script = json.loads(Path("sample_script.json").read_text(encoding="utf-8"))
     script["date"] = datetime.now(KST).strftime("%Y.%m.%d")
@@ -166,4 +225,5 @@ def sample():
 
 if __name__ == "__main__":
     {"build": build, "publish": publish, "reel-build": reel_build,
-     "reel-publish": reel_publish, "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()
+     "reel-publish": reel_publish, "evening-build": evening_build,
+     "evening-publish": evening_publish, "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()

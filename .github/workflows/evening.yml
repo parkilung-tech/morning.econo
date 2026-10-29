@@ -1,0 +1,57 @@
+name: evening-issue
+
+# 매일 오후 6시: 오늘 가장 이슈가 된 경제뉴스 1개를 한 장으로 정리해 게시
+# GitHub 예약 실행은 몇 분씩 늦게 시작될 때가 있어서 17:35에 시작 → 준비 후 18:00까지 기다렸다 게시
+on:
+  schedule:
+    - cron: "35 8 * * *"   # 매일 한국시간 오후 5:35 (UTC 08:35)
+  workflow_dispatch:        # Actions 탭에서 수동 실행 버튼
+
+permissions:
+  contents: write
+
+concurrency:
+  group: evening-issue
+  cancel-in-progress: false
+
+jobs:
+  evening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 한글 폰트 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+
+      - run: pip install -r requirements.txt
+
+      - name: 오늘의 이슈 고르기 + 한 장 만들기
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python main.py evening-build
+
+      - name: 이미지 업로드 (공개 주소 만들기)
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output
+          git commit -m "evening $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push
+
+      - name: 오후 6시에 인스타그램 게시
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: python main.py evening-publish
+
+      - name: 게시 기록 저장
+        if: always()
+        run: |
+          git add output
+          git commit -m "evening published $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push

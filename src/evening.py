@@ -1,0 +1,260 @@
+"""저녁 6시 '퇴근길 이슈 한 장': 오늘 가장 이슈가 된 뉴스 1개를 한 장(1080x1350)으로 정리."""
+import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+from .render import PAD, H, W, WEEKDAYS, Painter
+from .summarize import BRAND_TAG, _extract_json, limit_hashtags
+
+KST = timezone(timedelta(hours=9))
+
+PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은 저녁 6시 '퇴근길 이슈 한 장' 게시물을 만들 차례야.
+아래 오늘 기사 후보 중에서 오늘 하루 가장 이슈가 된 경제 뉴스 딱 1개를 골라, 직장인이 한 장으로 이해할 수 있게 정리해.
+
+고르는 기준:
+- 여러 언론사가 함께 다룬 주제일수록 이슈가 큰 거야. 비슷한 기사가 많은 주제를 우선해.
+- 직장인의 지갑·일자리·투자에 영향이 큰 뉴스를 우선해.
+- 오늘 아침 카드뉴스에서 이미 다룬 뉴스도 골라도 돼. 그럴 땐 아침 이후 나온 새 내용과 의미를 더 깊게 써.
+
+규칙:
+- 후보 기사에 나온 사실과 숫자만 써. 기사에 없는 숫자·전망·원인은 지어내지 마. 확실하지 않으면 빼.
+- 기사 문장을 그대로 베끼지 말고 네 말로 다시 써. 투자 권유 표현 금지.
+- 말투는 '~해요/~예요' 체.
+- 중요: 모든 문자열 값 안에는 큰따옴표를 절대 쓰지 마. 인용이 필요하면 작은따옴표(')나 「」를 써.
+
+각 항목 길이 (꼭 지켜, 한 장에 들어가야 해):
+- tag: 분야명 2~4자 (예: 금리, 증시, 부동산, 환율, 고용)
+- title: 16자 이내 헤드라인, 숫자가 있으면 넣기
+- one_line: 한 줄 요약 30자 이내
+- what: 무슨 일인지 2문장, 합쳐서 70자 이내
+- numbers: 기사에 나온 핵심 숫자 2~3개. value는 8자 이내(예: 1.0%, 3조 원), label은 12자 이내. 기사에 숫자가 없으면 빈 배열 []
+- why: 왜 이런 일이 생겼는지 1~2개, 각 32자 이내 (기사에 근거가 있을 때만)
+- impact: 그래서 나한테 무슨 의미인지 2개, 각 32자 이내
+- watch: 앞으로 지켜볼 것 1문장 36자 이내
+- sources: 참고한 언론사 이름 목록
+- caption: 3~4줄. 첫 줄은 궁금증 훅, 끝에서 두 번째 줄은 댓글로 답하기 쉬운 질문, 마지막 줄은 '이 한 장, 필요한 동료에게 보내주세요' 같은 공유 유도. 줄바꿈은 \\n
+- hashtags: 이 뉴스 주제에 딱 맞는 4개, '#' 포함. 계정 태그는 넣지 마.
+
+오늘 날짜: {date}
+
+[오늘 아침 카드뉴스에서 다룬 뉴스]
+{morning}
+
+[오늘 기사 후보]
+{articles}
+
+아래 JSON만 출력해 (설명·코드블록 없이):
+{{"tag": "...", "title": "...", "one_line": "...", "what": "...",
+  "numbers": [{{"value": "...", "label": "..."}}], "why": ["..."], "impact": ["...", "..."],
+  "watch": "...", "sources": ["..."], "caption": "...", "hashtags": ["#..."]}}
+"""
+
+DEFAULT_THEME = {  # 저녁은 요일 색 대신 노을 톤 하나로 고정 → 피드에서 아침 카드와 구분
+    "background": "#1B1020", "card": "#2B1B33", "accent": "#FF9E5E",
+    "text": "#FFF7F0", "subtext": "#C9B2AC",
+}
+
+
+def _strs(v, n):
+    if isinstance(v, str):
+        v = [v]
+    return [str(x).strip() for x in (v or []) if str(x).strip()][:n]
+
+
+def _validate(data: dict) -> dict:
+    if not str(data.get("title") or "").strip():
+        raise ValueError("title 없음")
+    out = {
+        "tag": str(data.get("tag") or "경제")[:5],
+        "title": str(data["title"]).strip(),
+        "one_line": str(data.get("one_line") or "").strip(),
+        "what": str(data.get("what") or "").strip(),
+        "why": _strs(data.get("why"), 2),
+        "impact": _strs(data.get("impact"), 2),
+        "watch": str(data.get("watch") or "").strip(),
+        "sources": _strs(data.get("sources"), 4),
+        "numbers": [],
+    }
+    for nb in data.get("numbers") or []:
+        if isinstance(nb, dict) and nb.get("value"):
+            out["numbers"].append({"value": str(nb["value"]).strip(), "label": str(nb.get("label") or "").strip()})
+    out["numbers"] = out["numbers"][:3]
+    if not out["what"] and not out["impact"]:
+        raise ValueError("본문 없음")
+    cap = data.get("caption")
+    if not isinstance(cap, str) or not cap.strip():
+        cap = f"오늘 하루 가장 뜨거웠던 경제 이슈, 한 장으로 정리했어요.\n{out['title']}"
+    out["caption"] = cap.replace("\\n", "\n").strip()
+    out["hashtags"] = limit_hashtags(data.get("hashtags") or ["#경제뉴스", "#경제이슈", "#재테크", "#직장인"])
+    return out
+
+
+def write(cfg: dict, articles: list[dict], morning_items: list[dict]) -> dict:
+    import anthropic
+
+    if not articles:
+        raise RuntimeError("오늘 기사가 없어서 저녁 게시는 건너뜁니다.")
+    listing = "\n".join(
+        f"{i+1}. [{a['source']}] {a['title']}\n   {re.sub('<[^>]+>', '', a['summary'])}"
+        for i, a in enumerate(articles)
+    )
+    morning = "\n".join(f"- [{it.get('tag', '')}] {it['headline']}" for it in morning_items) or "(없음)"
+    now = datetime.now(KST)
+    today = now.strftime("%Y년 %m월 %d일 ") + WEEKDAYS[now.weekday()] + "요일"
+    prompt = PROMPT.format(account=cfg["account_name"], date=today, morning=morning, articles=listing)
+    client = anthropic.Anthropic()
+
+    last = None
+    for attempt in range(3):
+        msg = client.messages.create(model=cfg["model"], max_tokens=6000,
+                                     messages=[{"role": "user", "content": prompt}])
+        text = "".join(b.text for b in msg.content if b.type == "text")
+        print(f"[저녁 원고 시도 {attempt + 1}] stop_reason={msg.stop_reason}")
+        try:
+            data = _validate(_extract_json(text))
+            data["date"] = now.strftime("%Y.%m.%d") + f" {WEEKDAYS[now.weekday()]}"
+            return data
+        except Exception as e:  # noqa: BLE001
+            last = e
+            print(f"  → 원고 해석 실패: {e}\n  → 응답 앞부분: {text[:400]}")
+    raise RuntimeError(f"저녁 원고 생성 실패 (3회 시도): {last}")
+
+
+def caption(post: dict) -> str:
+    parts = [post["caption"]]
+    if post.get("sources"):
+        parts += ["", "📰 출처: " + ", ".join(post["sources"])]
+    parts += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
+              " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
+    return "\n".join(parts)[:2200]
+
+
+# ---------------- 이미지 ----------------
+class EveningPainter(Painter):
+    def __init__(self, cfg: dict):
+        super().__init__(cfg)
+        t = {**DEFAULT_THEME, **(cfg.get("evening_theme") or {})}
+        self.bg, self.card, self.accent = t["background"], t["card"], t["accent"]
+        self.text, self.sub = t["text"], t["subtext"]
+
+    k = 1.0  # 내용이 길면 글씨·간격을 줄이는 배율
+
+    def F(self, size, bold=True):
+        return self.font(max(18, round(size * self.k)), bold)
+
+    def g(self, px):
+        return round(px * self.k)
+
+    def fit(self, d, text, sizes, max_w, max_lines, bold=True):
+        for s in sizes:
+            f = self.F(s, bold)
+            if len(self.wrap(d, text, f, max_w)) <= max_lines:
+                return f
+        return self.F(sizes[-1], bold)
+
+    def label(self, d, xy, text):
+        d.text(xy, text, font=self.F(30), fill=self.accent)
+        return xy[1] + self.g(46)
+
+    def bullets(self, d, x, y, items, max_w, size=34):
+        for it in items:
+            f = self.fit(d, it, (size, size - 3, size - 6), max_w - 34, 1, bold=False)
+            fs = f.size
+            d.ellipse([x, y + fs * 0.45, x + 10, y + fs * 0.45 + 10], fill=self.accent)
+            y = self.block(d, (x + 30, y), it, f, self.text, max_w - 34, 1.3) + self.g(8)
+        return y
+
+    def draw(self, post: dict) -> Image.Image:
+        # 한 장 안에 다 들어갈 때까지 배율을 줄여가며 다시 그림
+        for k in (1.0, 0.93, 0.86, 0.8, 0.74):
+            self.k = k
+            img, bottom = self._draw(post)
+            if bottom <= H - 130:
+                break
+        return img
+
+    def _draw(self, post: dict):
+        img = Image.new("RGB", (W, H), self.bg)
+        d = ImageDraw.Draw(img)
+        inner = W - 2 * PAD
+        d.rectangle([0, 0, W, 14], fill=self.accent)
+        d.text((PAD, 52), "퇴근길 이슈 한 장", font=self.font(32), fill=self.accent)
+        df = self.font(28, bold=False)
+        d.text((W - PAD - d.textlength(post["date"], font=df), 56), post["date"], font=df, fill=self.sub)
+
+        # 태그 + 제목 + 한 줄 요약
+        y = 128
+        tf = self.font(28)
+        tw = d.textlength(post["tag"], font=tf)
+        d.rounded_rectangle([PAD, y, PAD + tw + 40, y + 50], radius=25, outline=self.accent, width=3)
+        d.text((PAD + 20, y + 8), post["tag"], font=tf, fill=self.accent)
+        y += 72
+        y = self.block(d, (PAD, y), post["title"], self.fit(d, post["title"], (84, 74, 64, 56), inner, 2),
+                       self.text, inner, 1.18) + self.g(18)
+        if post["one_line"]:
+            y = self.block(d, (PAD, y), post["one_line"], self.fit(d, post["one_line"], (38, 34, 30), inner, 1, False),
+                           self.sub, inner) + self.g(26)
+
+        # 무슨 일?
+        y = self.label(d, (PAD, y), "무슨 일?")
+        y = self.block(d, (PAD, y), post["what"], self.fit(d, post["what"], (36, 33, 30), inner, 3, False),
+                       self.text, inner, 1.4) + self.g(24)
+
+        # 숫자로 보면
+        nums = post["numbers"]
+        if nums:
+            gap, bh = 20, self.g(140)
+            bw = (inner - gap * (len(nums) - 1)) / len(nums)
+            for i, nb in enumerate(nums):
+                x0 = PAD + i * (bw + gap)
+                d.rounded_rectangle([x0, y, x0 + bw, y + bh], radius=24, fill=self.card)
+                vf = self.fit(d, nb["value"], (54, 46, 40, 34), bw - 40, 1)
+                d.text((x0 + 24, y + self.g(20)), nb["value"], font=vf, fill=self.accent)
+                if nb["label"]:
+                    lf = self.fit(d, nb["label"], (28, 25, 22), bw - 40, 1, False)
+                    d.text((x0 + 24, y + self.g(90)), self.wrap(d, nb["label"], lf, bw - 40)[0], font=lf, fill=self.sub)
+            y += bh + self.g(28)
+
+        # 왜?
+        if post["why"]:
+            y = self.label(d, (PAD, y), "왜?")
+            y = self.bullets(d, PAD, y, post["why"], inner) + self.g(16)
+
+        # 그래서 나한테는? (강조 박스: 높이를 먼저 재고 박스 → 글씨 순서로 그림)
+        if post["impact"]:
+            top = y
+            probe = ImageDraw.Draw(Image.new("RGB", (W, H)))
+            yy = self.bullets(probe, PAD + 36, top + self.g(26) + self.g(46), post["impact"], inner - 72)
+            bottom = yy + self.g(16)
+            d.rounded_rectangle([PAD, top, W - PAD, bottom], radius=28, fill=self.card)
+            d.rectangle([PAD, top + 24, PAD + 8, bottom - 24], fill=self.accent)
+            yy = self.label(d, (PAD + 36, top + self.g(26)), "그래서 나한테는?")
+            self.bullets(d, PAD + 36, yy, post["impact"], inner - 72)
+            y = bottom + self.g(30)
+
+        # 앞으로 볼 것
+        if post["watch"]:
+            lw = self.g(200)
+            wf = self.fit(d, post["watch"], (32, 29, 26), inner - lw, 2, False)
+            d.text((PAD, y + 2), "앞으로 볼 것", font=self.F(28), fill=self.accent)
+            y = self.block(d, (PAD + lw, y), post["watch"], wf, self.text, inner - lw, 1.35)
+
+        # 하단: 출처 + 핸들
+        d.line([PAD, H - 110, W - PAD, H - 110], fill=self.card, width=2)
+        d.text((PAD, H - 82), self.handle, font=self.font(30), fill=self.accent)
+        if post["sources"]:
+            src = "출처 " + ", ".join(post["sources"])
+            for sz in (24, 22, 20):
+                sf = self.font(sz, bold=False)
+                if d.textlength(src, font=sf) <= inner - 320:
+                    break
+            d.text((W - PAD - d.textlength(src, font=sf), H - 78), src, font=sf, fill=self.sub)
+        return img, y
+
+
+def render(cfg: dict, post: dict, out: Path) -> Path:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    EveningPainter(cfg).draw(post).save(out, "JPEG", quality=92)
+    return out

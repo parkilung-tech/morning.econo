@@ -52,6 +52,13 @@ class Instagram:
         res = self._post(f"{self.user_id}/media_publish", creation_id=c["id"])
         return res["id"]
 
+    def publish_image(self, image_url: str, caption: str) -> str:
+        """사진 한 장 게시."""
+        c = self._post(f"{self.user_id}/media", image_url=image_url, caption=caption)
+        self._wait_ready(c["id"])
+        res = self._post(f"{self.user_id}/media_publish", creation_id=c["id"])
+        return res["id"]
+
     def publish_carousel(self, image_urls: list[str], caption: str) -> str:
         children = []
         for url in image_urls:

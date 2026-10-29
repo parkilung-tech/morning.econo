@@ -75,6 +75,16 @@ graph_api_version: "v25.0"
 # 이미지가 올라갈 공개 주소. {repo}는 GitHub Actions가 자동으로 채움
 image_base_url: "https://raw.githubusercontent.com/{repo}/main/output"
 
+# ===== 저녁 '퇴근길 이슈 한 장' =====
+evening_enabled: true       # false로 바꾸면 저녁 게시 안 함
+evening_hour: 18            # 게시 시각 (한국시간, 시)
+# evening_theme:            # 색을 바꾸고 싶으면 주석을 풀고 수정 (기본: 노을 톤)
+#   background: "#1B1020"
+#   card: "#2B1B33"
+#   accent: "#FF9E5E"
+#   text: "#FFF7F0"
+#   subtext: "#C9B2AC"
+
 # ===== 릴스 =====
 reel_enabled: true          # false로 바꾸면 릴스는 안 올림
 reel_seconds_per_card: 3    # 카드 한 장당 보여줄 초
