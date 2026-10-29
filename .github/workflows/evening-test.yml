@@ -1,0 +1,38 @@
+name: evening-test
+
+# 게시하지 않고 저녁 한 장만 미리 만들어 보는 테스트 (Actions 탭에서 수동 실행)
+# 결과는 output/_test/ 에 저장돼요
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - run: pip install -r requirements.txt
+      - name: 저녁 한 장 미리 만들기 (게시 안 함)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          echo "PIXABAY 키 등록됨: $([ -n "$PIXABAY_API_KEY" ] && echo 예 || echo 아니오)"
+          python main.py evening-build
+          D=output/$(TZ=Asia/Seoul date +%F)
+          rm -rf output/_test && mkdir -p output/_test
+          mv $D/evening* output/_test/
+      - name: 결과 저장
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output/_test
+          git commit -m "evening test $(TZ=Asia/Seoul date '+%F %H:%M')" || echo "변경 없음"
+          git pull --rebase -q && git push
