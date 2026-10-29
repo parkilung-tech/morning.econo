@@ -137,7 +137,8 @@ def caption(post: dict) -> str:
     if post.get("sources"):
         parts += ["", "📰 출처: " + ", ".join(post["sources"])]
     if post.get("photo"):
-        parts += [f"📷 사진: {post['photo']['photographer']} / Pexels"]
+        ph = post["photo"]
+        parts += [f"📷 사진: {ph.get('photographer') or ph.get('provider', '')} / {ph.get('provider', 'Pexels')}"]
     parts += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
               " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
     return "\n".join(parts)[:2200]
@@ -284,7 +285,7 @@ class EveningPainter(Painter):
         d.line([PAD, H - 110, W - PAD, H - 110], fill=self.card, width=2)
         d.text((PAD, H - 82), self.handle, font=self.font(30), fill=self.accent)
         if post["sources"]:
-            src = "출처 " + ", ".join(post["sources"]) + (" · 사진 Pexels" if self.photo else "")
+            src = "출처 " + ", ".join(post["sources"]) + (f" · 사진 {post.get('photo', {}).get('provider', 'Pixabay')}" if self.photo else "")
             for sz in (24, 22, 20):
                 sf = self.font(sz, bold=False)
                 if d.textlength(src, font=sf) <= inner - 320:

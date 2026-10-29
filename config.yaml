@@ -78,7 +78,7 @@ image_base_url: "https://raw.githubusercontent.com/{repo}/main/output"
 # ===== 저녁 '퇴근길 이슈 한 장' =====
 evening_enabled: true       # false로 바꾸면 저녁 게시 안 함
 evening_hour: 18            # 게시 시각 (한국시간, 시)
-evening_photo: true         # 위쪽에 관련 사진 넣기 (Pexels 무료 사진, PEXELS_API_KEY 필요)
+evening_photo: true         # 위쪽에 관련 사진 넣기 (Pixabay 무료 사진, PIXABAY_API_KEY 필요)
 # evening_theme:            # 색을 바꾸고 싶으면 주석을 풀고 수정 (기본: 노을 톤)
 #   background: "#1B1020"
 #   card: "#2B1B33"
