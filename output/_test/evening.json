@@ -1,0 +1,57 @@
+{
+  "tag": "반도체",
+  "title": "삼성 반도체 이익 106.5조",
+  "one_line": "반도체 웃고 완제품은 8천억 적자",
+  "what": "삼성전자 3분기 반도체 영업익이 106.5조 원이에요. 완제품은 8천억 원 적자고, 코스피는 장중 2%대 밀렸어요.",
+  "why": [
+    "AI 투자 지속과 반도체 공급 제약이 겹쳤어요",
+    "메모리 가격 상승이 스마트폰 수익엔 부담이에요"
+  ],
+  "impact": [
+    "삼성전자 주주라면 배당·자사주 소각 계획을 확인해요",
+    "신한증권 고객 배당 수령 143만 명, 17%↑"
+  ],
+  "watch": "내년 반도체 강세 전망과 완제품 실적 회복 여부를 지켜봐요.",
+  "sources": [
+    "연합뉴스"
+  ],
+  "numbers": [
+    {
+      "value": "106.5조",
+      "label": "3분기 반도체 영업익"
+    },
+    {
+      "value": "110조 원",
+      "label": "최대 주주환원 규모"
+    },
+    {
+      "value": "8천억 원",
+      "label": "완제품 부문 적자"
+    }
+  ],
+  "caption": "반도체가 106.5조를 벌었는데 코스피는 왜 흔들렸을까요?\n삼성전자는 최대 110조 원 규모의 주주환원도 다시 밝혔어요.\n여러분은 이번 실적, 반도체 호황과 완제품 적자 중 어디에 더 눈이 가세요?\n이 한 장, 필요한 동료에게 보내주세요.",
+  "photo_queries": [
+    "Seoul business district",
+    "Korea stock market screen",
+    "semiconductor chip closeup",
+    "Seoul city skyline",
+    "economy business"
+  ],
+  "hashtags": [
+    "#삼성전자",
+    "#반도체",
+    "#주주환원",
+    "#코스피",
+    "#출근길경제한잔"
+  ],
+  "date": "2026.10.29 목",
+  "photo": {
+    "file": "evening_photo.jpg",
+    "query": "Seoul business district",
+    "id": "pixabay:255116",
+    "url": "https://pixabay.com/photos/skyline-cityscape-buildings-255116/",
+    "photographer": "cegoh",
+    "provider": "Pixabay"
+  },
+  "caption_full": "반도체가 106.5조를 벌었는데 코스피는 왜 흔들렸을까요?\n삼성전자는 최대 110조 원 규모의 주주환원도 다시 밝혔어요.\n여러분은 이번 실적, 반도체 호황과 완제품 적자 중 어디에 더 눈이 가세요?\n이 한 장, 필요한 동료에게 보내주세요.\n\n📰 출처: 연합뉴스\n📷 사진: cegoh / Pixabay\n\n☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요\n\n#삼성전자 #반도체 #주주환원 #코스피 #출근길경제한잔"
+}
