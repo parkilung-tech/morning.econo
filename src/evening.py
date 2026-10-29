@@ -36,6 +36,8 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 - sources: 참고한 언론사 이름 목록
 - caption: 3~4줄. 첫 줄은 궁금증 훅, 끝에서 두 번째 줄은 댓글로 답하기 쉬운 질문, 마지막 줄은 '이 한 장, 필요한 동료에게 보내주세요' 같은 공유 유도. 줄바꿈은 \\n
 - hashtags: 이 뉴스 주제에 딱 맞는 4개, '#' 포함. 계정 태그는 넣지 마.
+- photo_queries: 무료 사진 사이트에서 이 뉴스에 어울리는 배경 사진을 찾을 영어 검색어 3개. 구체적인 장면 2~4단어로, 좁은 것부터 넓은 것 순서
+  (예: 금리 → "bank interest rate", "korean won banknotes", "money finance"). 실존 인물 이름, 회사 로고, 국기는 넣지 마.
 
 오늘 날짜: {date}
 
@@ -48,7 +50,8 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 아래 JSON만 출력해 (설명·코드블록 없이):
 {{"tag": "...", "title": "...", "one_line": "...", "what": "...",
   "numbers": [{{"value": "...", "label": "..."}}], "why": ["..."], "impact": ["...", "..."],
-  "watch": "...", "sources": ["..."], "caption": "...", "hashtags": ["#..."]}}
+  "watch": "...", "sources": ["..."], "caption": "...", "hashtags": ["#..."],
+  "photo_queries": ["...", "...", "..."]}}
 """
 
 DEFAULT_THEME = {  # 저녁은 요일 색 대신 노을 톤 하나로 고정 → 피드에서 아침 카드와 구분
@@ -87,6 +90,7 @@ def _validate(data: dict) -> dict:
     if not isinstance(cap, str) or not cap.strip():
         cap = f"오늘 하루 가장 뜨거웠던 경제 이슈, 한 장으로 정리했어요.\n{out['title']}"
     out["caption"] = cap.replace("\\n", "\n").strip()
+    out["photo_queries"] = _strs(data.get("photo_queries"), 3) + ["economy business", "finance"]
     out["hashtags"] = limit_hashtags(data.get("hashtags") or ["#경제뉴스", "#경제이슈", "#재테크", "#직장인"])
     return out
 
@@ -126,6 +130,8 @@ def caption(post: dict) -> str:
     parts = [post["caption"]]
     if post.get("sources"):
         parts += ["", "📰 출처: " + ", ".join(post["sources"])]
+    if post.get("photo"):
+        parts += [f"📷 사진: {post['photo']['photographer']} / Pexels"]
     parts += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
               " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
     return "\n".join(parts)[:2200]
@@ -140,6 +146,24 @@ class EveningPainter(Painter):
         self.text, self.sub = t["text"], t["subtext"]
 
     k = 1.0  # 내용이 길면 글씨·간격을 줄이는 배율
+    photo = None  # 위쪽 배너 사진 (PIL Image)
+    ph = 0  # 배너 높이
+
+    def banner(self, img):
+        """사진을 위쪽에 꽉 채우고, 위는 살짝 어둡게·아래는 배경색으로 자연스럽게 이어지게."""
+        src = self.photo
+        scale = max(W / src.width, self.ph / src.height)
+        im = src.resize((round(src.width * scale), round(src.height * scale)), Image.LANCZOS)
+        left, top = (im.width - W) // 2, (im.height - self.ph) // 2
+        img.paste(im.crop((left, top, left + W, top + self.ph)), (0, 0))
+        bg = Image.new("RGB", (W, self.ph), self.bg)
+        mask = Image.new("L", (1, self.ph))
+        for yy in range(self.ph):
+            t = yy / self.ph
+            top_dark = max(0.0, 0.55 * (1 - t / 0.3))          # 위쪽 글씨 잘 보이게
+            fade = max(0.0, min(1.0, (t - 0.35) / 0.65)) ** 1.2  # 아래로 갈수록 배경색
+            mask.putpixel((0, yy), round(255 * max(top_dark, fade)))
+        img.paste(bg, (0, 0), mask.resize((W, self.ph)))
 
     def F(self, size, bold=True):
         return self.font(max(18, round(size * self.k)), bold)
@@ -168,8 +192,10 @@ class EveningPainter(Painter):
 
     def draw(self, post: dict) -> Image.Image:
         # 한 장 안에 다 들어갈 때까지 배율을 줄여가며 다시 그림
-        for k in (1.0, 0.93, 0.86, 0.8, 0.74):
-            self.k = k
+        steps = ([(470, 1.0), (470, 0.93), (420, 0.93), (420, 0.86), (370, 0.86), (370, 0.8), (330, 0.8), (330, 0.74)]
+                 if self.photo else [(0, k) for k in (1.0, 0.93, 0.86, 0.8, 0.74)])
+        for ph, k in steps:
+            self.ph, self.k = ph, k
             img, bottom = self._draw(post)
             if bottom <= H - 130:
                 break
@@ -177,19 +203,26 @@ class EveningPainter(Painter):
 
     def _draw(self, post: dict):
         img = Image.new("RGB", (W, H), self.bg)
+        if self.photo:
+            self.banner(img)
         d = ImageDraw.Draw(img)
         inner = W - 2 * PAD
         d.rectangle([0, 0, W, 14], fill=self.accent)
         d.text((PAD, 52), "퇴근길 이슈 한 장", font=self.font(32), fill=self.accent)
         df = self.font(28, bold=False)
-        d.text((W - PAD - d.textlength(post["date"], font=df), 56), post["date"], font=df, fill=self.sub)
+        d.text((W - PAD - d.textlength(post["date"], font=df), 56), post["date"], font=df,
+               fill=self.text if self.photo else self.sub)
 
-        # 태그 + 제목 + 한 줄 요약
-        y = 128
+        # 태그 + 제목 + 한 줄 요약 (사진이 있으면 사진 아래쪽에 겹쳐 시작)
+        y = self.ph - 120 if self.photo else 128
         tf = self.font(28)
         tw = d.textlength(post["tag"], font=tf)
-        d.rounded_rectangle([PAD, y, PAD + tw + 40, y + 50], radius=25, outline=self.accent, width=3)
-        d.text((PAD + 20, y + 8), post["tag"], font=tf, fill=self.accent)
+        if self.photo:  # 사진 위에서는 채운 태그로 또렷하게
+            d.rounded_rectangle([PAD, y, PAD + tw + 40, y + 50], radius=25, fill=self.accent)
+            d.text((PAD + 20, y + 8), post["tag"], font=tf, fill=self.bg)
+        else:
+            d.rounded_rectangle([PAD, y, PAD + tw + 40, y + 50], radius=25, outline=self.accent, width=3)
+            d.text((PAD + 20, y + 8), post["tag"], font=tf, fill=self.accent)
         y += 72
         y = self.block(d, (PAD, y), post["title"], self.fit(d, post["title"], (84, 74, 64, 56), inner, 2),
                        self.text, inner, 1.18) + self.g(18)
@@ -245,7 +278,7 @@ class EveningPainter(Painter):
         d.line([PAD, H - 110, W - PAD, H - 110], fill=self.card, width=2)
         d.text((PAD, H - 82), self.handle, font=self.font(30), fill=self.accent)
         if post["sources"]:
-            src = "출처 " + ", ".join(post["sources"])
+            src = "출처 " + ", ".join(post["sources"]) + (" · 사진 Pexels" if self.photo else "")
             for sz in (24, 22, 20):
                 sf = self.font(sz, bold=False)
                 if d.textlength(src, font=sf) <= inner - 320:
@@ -254,7 +287,10 @@ class EveningPainter(Painter):
         return img, y
 
 
-def render(cfg: dict, post: dict, out: Path) -> Path:
+def render(cfg: dict, post: dict, out: Path, photo_path: Path | None = None) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
-    EveningPainter(cfg).draw(post).save(out, "JPEG", quality=92)
+    painter = EveningPainter(cfg)
+    if photo_path and Path(photo_path).exists():
+        painter.photo = Image.open(photo_path).convert("RGB")
+    painter.draw(post).save(out, "JPEG", quality=92)
     return out

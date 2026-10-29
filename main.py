@@ -176,7 +176,14 @@ def evening_build():
     morning = OUT / "post.json"
     items = json.loads(morning.read_text(encoding="utf-8")).get("items", []) if morning.exists() else []
     post = evening.write(CFG, articles, items)
-    evening.render(CFG, post, OUT / "evening.jpg")
+    OUT.mkdir(parents=True, exist_ok=True)
+    photo_path = None
+    if CFG.get("evening_photo", True):
+        from src import photo
+        info = photo.find(post.get("photo_queries", []), OUT / "evening_photo.jpg")
+        if info:
+            post["photo"], photo_path = info, OUT / "evening_photo.jpg"
+    evening.render(CFG, post, OUT / "evening.jpg", photo_path)
     post["caption_full"] = evening.caption(post)
     OUT.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
