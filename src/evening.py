@@ -34,7 +34,26 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 - impact: 그래서 나한테 무슨 의미인지 2개, 각 32자 이내
 - watch: 앞으로 지켜볼 것 1문장 36자 이내
 - sources: 참고한 언론사 이름 목록
-- caption: 3~4줄. 첫 줄은 궁금증 훅, 끝에서 두 번째 줄은 댓글로 답하기 쉬운 질문, 마지막 줄은 '이 한 장, 필요한 동료에게 보내주세요' 같은 공유 유도. 줄바꿈은 \\n
+- caption: 이미지를 안 보고 캡션만 읽어도 뉴스를 충분히 이해할 수 있는 자세한 해설. 이미지보다 더 깊게, 배경과 맥락까지 풀어줘.
+  공백 포함 700~1100자. 줄바꿈은 \\n, 문단 사이엔 빈 줄(\\n\\n). 아래 형식을 그대로 지켜:
+  (1줄) 궁금증을 일으키는 훅 한 문장
+  (빈 줄)
+  📌 무슨 일이 있었나
+  누가·언제·무엇을 했는지 3~4문장. 핵심 숫자는 문장 안에 넣어.
+  (빈 줄)
+  🔍 왜 중요할까
+  이 일이 생긴 배경과 시장·업계 맥락 3~4문장. 이전 흐름과 비교할 수 있으면 비교해.
+  (빈 줄)
+  💡 나한테는 어떤 의미?
+  직장인·투자자·대출자 등 독자 입장에서의 영향 2~3문장. 투자 권유는 금지, '확인해볼 것' 위주로.
+  (빈 줄)
+  👀 앞으로 지켜볼 것
+  다음 일정이나 변수 1~2문장.
+  (빈 줄)
+  댓글로 답하기 쉬운 질문 한 줄
+  '이 한 장, 필요한 동료에게 보내주세요' 같은 공유 유도 한 줄
+  · 캡션에도 기사에 없는 사실·숫자·전망은 절대 지어내지 마. 기사 정보가 부족하면 짧아져도 괜찮아.
+  · 전문 용어는 처음 나올 때 괄호로 쉽게 풀어줘 (예: FCF(잉여현금흐름)).
 - hashtags: 이 뉴스 주제에 딱 맞는 4개, '#' 포함. 계정 태그는 넣지 마.
 - photo_queries: 무료 사진 사이트에서 이 뉴스에 어울리는 실사 배경 사진을 찾을 영어 검색어 3개. 구체적인 장면 2~4단어.
   · 한국 국내 뉴스면 1~2번째 검색어에 한국 장면이 나오게 Seoul, Korea, Korean won 같은 말을 넣어
@@ -118,7 +137,7 @@ def write(cfg: dict, articles: list[dict], morning_items: list[dict]) -> dict:
 
     last = None
     for attempt in range(3):
-        msg = client.messages.create(model=cfg["model"], max_tokens=6000,
+        msg = client.messages.create(model=cfg["model"], max_tokens=8000,
                                      messages=[{"role": "user", "content": prompt}])
         text = "".join(b.text for b in msg.content if b.type == "text")
         print(f"[저녁 원고 시도 {attempt + 1}] stop_reason={msg.stop_reason}")
@@ -133,15 +152,20 @@ def write(cfg: dict, articles: list[dict], morning_items: list[dict]) -> dict:
 
 
 def caption(post: dict) -> str:
-    parts = [post["caption"]]
+    tail = []
     if post.get("sources"):
-        parts += ["", "📰 출처: " + ", ".join(post["sources"])]
+        tail += ["", "📰 출처: " + ", ".join(post["sources"])]
     if post.get("photo"):
         ph = post["photo"]
-        parts += [f"📷 사진: {ph.get('photographer') or ph.get('provider', '')} / {ph.get('provider', 'Pexels')}"]
-    parts += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
-              " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
-    return "\n".join(parts)[:2200]
+        tail += [f"📷 사진: {ph.get('photographer') or ph.get('provider', '')} / {ph.get('provider', 'Pexels')}"]
+    tail += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
+             " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
+    tail_txt = "\n".join(tail)
+    body = post["caption"].strip()
+    room = 2200 - len(tail_txt) - 1  # 인스타 캡션 최대 2200자: 해시태그·출처는 꼭 남기고 본문을 줄임
+    if len(body) > room:
+        body = body[:room].rsplit("\n", 1)[0].rstrip()
+    return body + "\n" + tail_txt
 
 
 # ---------------- 이미지 ----------------
