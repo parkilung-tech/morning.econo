@@ -36,8 +36,14 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 - sources: 참고한 언론사 이름 목록
 - caption: 3~4줄. 첫 줄은 궁금증 훅, 끝에서 두 번째 줄은 댓글로 답하기 쉬운 질문, 마지막 줄은 '이 한 장, 필요한 동료에게 보내주세요' 같은 공유 유도. 줄바꿈은 \\n
 - hashtags: 이 뉴스 주제에 딱 맞는 4개, '#' 포함. 계정 태그는 넣지 마.
-- photo_queries: 무료 사진 사이트에서 이 뉴스에 어울리는 배경 사진을 찾을 영어 검색어 3개. 구체적인 장면 2~4단어로, 좁은 것부터 넓은 것 순서
-  (예: 금리 → "bank interest rate", "korean won banknotes", "money finance"). 실존 인물 이름, 회사 로고, 국기는 넣지 마.
+- photo_queries: 무료 사진 사이트에서 이 뉴스에 어울리는 실사 배경 사진을 찾을 영어 검색어 3개. 구체적인 장면 2~4단어.
+  · 한국 국내 뉴스면 1~2번째 검색어에 한국 장면이 나오게 Seoul, Korea, Korean won 같은 말을 넣어
+    (예: 금리 → "Seoul bank street", "Korean won banknotes", "bank interest rate";
+         부동산 → "Seoul apartment complex", "Korea apartment buildings", "real estate housing";
+         증시 → "Seoul financial district", "stock market chart", "stock trading screen").
+  · 해외 뉴스면 그 나라·주제 장면으로 (예: 미국 연준 → "Washington DC", "US dollar bills", "federal reserve").
+  · 3번째는 한국·나라 이름 없이 주제만 담은 넓은 검색어.
+  · 실존 인물 이름, 회사 로고·상표, 국기는 넣지 마.
 
 오늘 날짜: {date}
 
@@ -90,7 +96,7 @@ def _validate(data: dict) -> dict:
     if not isinstance(cap, str) or not cap.strip():
         cap = f"오늘 하루 가장 뜨거웠던 경제 이슈, 한 장으로 정리했어요.\n{out['title']}"
     out["caption"] = cap.replace("\\n", "\n").strip()
-    out["photo_queries"] = _strs(data.get("photo_queries"), 3) + ["economy business", "finance"]
+    out["photo_queries"] = _strs(data.get("photo_queries"), 3) + ["Seoul city skyline", "economy business"]
     out["hashtags"] = limit_hashtags(data.get("hashtags") or ["#경제뉴스", "#경제이슈", "#재테크", "#직장인"])
     return out
 
