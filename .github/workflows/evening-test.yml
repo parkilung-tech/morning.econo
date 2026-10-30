@@ -33,6 +33,7 @@ jobs:
         run: |
           git config user.name "news-bot"
           git config user.email "news-bot@users.noreply.github.com"
+          git checkout -- data 2>/dev/null || true   # 테스트는 사진 사용 기록을 남기지 않음
           git add output/_test
           git commit -m "evening test $(TZ=Asia/Seoul date '+%F %H:%M')" || echo "변경 없음"
           git pull --rebase -q && git push
