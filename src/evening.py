@@ -133,7 +133,14 @@ def write(cfg: dict, articles: list[dict], morning_items: list[dict]) -> dict:
     morning = "\n".join(f"- [{it.get('tag', '')}] {it['headline']}" for it in morning_items) or "(없음)"
     now = datetime.now(KST)
     today = now.strftime("%Y년 %m월 %d일 ") + WEEKDAYS[now.weekday()] + "요일"
+    from .dayoff import describe
+    from .summarize import OFFDAY_RULE
+    kind = describe(now.date(), cfg)
+    if kind.startswith("공휴일"):
+        today += f" ({kind})"
     prompt = PROMPT.format(account=cfg["account_name"], date=today, morning=morning, articles=listing)
+    if kind:  # 쉬는 날엔 '퇴근길' 대신 '오늘의 이슈 한 장'
+        prompt = prompt.replace("'퇴근길 이슈 한 장'", "'오늘의 이슈 한 장'") + OFFDAY_RULE.format(kind=kind)
     client = anthropic.Anthropic()
 
     last = None
@@ -173,6 +180,7 @@ def caption(post: dict) -> str:
 class EveningPainter(Painter):
     def __init__(self, cfg: dict):
         super().__init__(cfg)
+        self.cfg = cfg
         t = {**DEFAULT_THEME, **(cfg.get("evening_theme") or {})}
         self.bg, self.card, self.accent = t["background"], t["card"], t["accent"]
         self.text, self.sub = t["text"], t["subtext"]
@@ -240,7 +248,9 @@ class EveningPainter(Painter):
         d = ImageDraw.Draw(img)
         inner = W - 2 * PAD
         d.rectangle([0, 0, W, 14], fill=self.accent)
-        d.text((PAD, 52), "퇴근길 이슈 한 장", font=self.font(32), fill=self.accent)
+        from .dayoff import is_day_off
+        label = "오늘의 이슈 한 장" if is_day_off(None, self.cfg) else "퇴근길 이슈 한 장"
+        d.text((PAD, 52), label, font=self.font(32), fill=self.accent)
         df = self.font(28, bold=False)
         d.text((W - PAD - d.textlength(post["date"], font=df), 56), post["date"], font=df,
                fill=self.text if self.photo else self.sub)

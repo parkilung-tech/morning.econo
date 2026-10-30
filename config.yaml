@@ -86,6 +86,11 @@ evening_photo: true         # 위쪽에 관련 사진 넣기 (Pixabay 무료 사
 #   text: "#FFF7F0"
 #   subtext: "#C9B2AC"
 
+# ===== 쉬는 날 =====
+# 토·일·법정공휴일(대체공휴일 포함)은 자동으로 '출근길·퇴근길' 표현을 빼요.
+# 임시공휴일처럼 자동으로 안 잡히는 날은 아래에 추가 (예: "2026-12-31": "임시공휴일")
+extra_days_off: {}
+
 # ===== 릴스 =====
 reel_enabled: true          # false로 바꾸면 릴스는 안 올림
 reel_seconds_per_card: 3    # 카드 한 장당 보여줄 초

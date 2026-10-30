@@ -26,6 +26,10 @@ class Painter:
         self.reg_path = cfg.get("font_regular_path", cfg["font_path"])
         self.idx = cfg.get("font_index", 0)
         self.brand = cfg["account_name"]
+        from .dayoff import is_day_off
+        self.day_off = is_day_off(day, cfg)
+        self.outro_sub = ("꼭 알아야 할 경제 뉴스만 골라 정리해드려요." if self.day_off
+                          else "출근 전 꼭 알아야 할 뉴스만 골라 정리해드려요.")
         self.handle = cfg["handle"]
 
     def font(self, size: int, bold=True):
@@ -127,11 +131,11 @@ class Painter:
         img, d = self.base(total, total)
         d.rectangle([0, H - 140, W, H], fill=self.bg)  # 기본 하단 핸들 가리기
         y = self.block(d, (PAD, 280), "매일 아침\n3분이면 끝", self.font(110), self.text, W - 2 * PAD, 1.2)
-        y = self.block(d, (PAD, y + 40), "출근 전 꼭 알아야 할 뉴스만 골라 정리해드려요.", self.font(44, bold=False), self.sub, W - 2 * PAD)
+        y = self.block(d, (PAD, y + 40), self.outro_sub, self.font(44, bold=False), self.sub, W - 2 * PAD)
         y += 80
         # CTA는 하나로 집중: 동료에게 보내기(DM 공유)가 노출에 가장 크게 작용
         d.rounded_rectangle([PAD, y, W - PAD, y + 130], radius=65, fill=self.accent)
-        label = "이 뉴스, 필요한 동료에게 보내기"
+        label = "이 뉴스, 필요한 사람에게 보내기" if self.day_off else "이 뉴스, 필요한 동료에게 보내기"
         lf = self.font(46)
         d.text(((W - d.textlength(label, font=lf)) / 2, y + 34), label, font=lf, fill=self.bg)
         y += 130 + 50

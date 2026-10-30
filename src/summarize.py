@@ -50,6 +50,11 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 # 인스타는 게시물당 해시태그 최대 5개 → 주제 태그 4개 + 계정 태그 1개
 BRAND_TAG = "#출근길경제한잔"
 MAX_HASHTAGS = 5
+OFFDAY_RULE = """
+- 중요: 오늘은 {kind}이라 쉬는 날이야. '출근', '출근길', '퇴근', '퇴근길', '출근 전', '업무 시작 전' 같은 표현은 caption·제목·본문 어디에도 절대 쓰지 마.
+  대신 '주말', '쉬는 날', '여유로운 오늘' 같은 말을 쓰고, 공유 유도는 '동료' 대신 '필요한 사람·친구'로 써."""
+
+
 DEFAULT_HASHTAGS = ["#경제뉴스", "#재테크", "#직장인", "#경제공부"]
 
 
@@ -110,7 +115,7 @@ def _validate(data: dict, n: int) -> dict:
     caption = data.get("caption")
     if not isinstance(caption, str) or not caption.strip():
         heads = "\n".join(f"✔️ {it['headline']}" for it in data["items"])
-        caption = f"오늘 꼭 알아야 할 경제 뉴스 {len(data['items'])}가지\n{heads}\n저장해두고 출근길에 보세요"
+        caption = f"오늘 꼭 알아야 할 경제 뉴스 {len(data['items'])}가지\n{heads}\n저장해두고 다시 보세요"
     data["caption"] = caption.replace("\\n", "\n")
 
     tags = data.get("hashtags")
@@ -145,10 +150,16 @@ def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None 
     today = now.strftime("%Y년 %m월 %d일 ") + "월화수목금토일"[now.weekday()] + "요일"
     n = cfg["news_per_post"]
     task = (TASK_WEEKLY if week_items else TASK_DAILY).format(n=n)
+    from .dayoff import describe
+    kind = describe(now.date(), cfg)
+    if kind.startswith("공휴일"):
+        today += f" ({kind})"
     prompt = PROMPT.format(
         account=cfg["account_name"], topic=cfg["topic"], task=task,
         date=today, articles=listing,
     )
+    if kind:  # 토·일·공휴일엔 출근길 표현 금지
+        prompt += OFFDAY_RULE.format(kind=kind)
     client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 환경변수 사용
 
     last_error = None
