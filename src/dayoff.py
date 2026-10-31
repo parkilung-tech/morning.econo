@@ -28,3 +28,12 @@ def describe(day: date | None = None, cfg: dict | None = None) -> str:
     if name:
         return f"공휴일({name})"
     return "토요일" if day.weekday() == 5 else "일요일" if day.weekday() == 6 else ""
+
+
+def brand_name(cfg: dict, day: date | None = None) -> str:
+    """카드 상단 브랜드명. 쉬는 날엔 '출근길' 대신 '주말/휴일 경제 한 잔'."""
+    day = day or datetime.now(KST).date()
+    if not is_day_off(day, cfg):
+        return cfg["account_name"]
+    return cfg.get("dayoff_brand_holiday" if holiday_name(day, cfg) else "dayoff_brand_weekend") or (
+        "휴일 경제 한 잔" if holiday_name(day, cfg) else "주말 경제 한 잔")

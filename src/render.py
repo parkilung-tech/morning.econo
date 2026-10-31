@@ -25,8 +25,8 @@ class Painter:
         self.bold_path = cfg["font_path"]
         self.reg_path = cfg.get("font_regular_path", cfg["font_path"])
         self.idx = cfg.get("font_index", 0)
-        self.brand = cfg["account_name"]
-        from .dayoff import is_day_off
+        from .dayoff import brand_name, is_day_off
+        self.brand = brand_name(cfg, day)
         self.day_off = is_day_off(day, cfg)
         self.outro_sub = ("꼭 알아야 할 경제 뉴스만 골라 정리해드려요." if self.day_off
                           else "출근 전 꼭 알아야 할 뉴스만 골라 정리해드려요.")

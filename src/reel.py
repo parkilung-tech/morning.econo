@@ -22,7 +22,7 @@ def make_hook(cfg: dict, post: dict, out: Path, day: date) -> Path:
     pad = 90
     d.rectangle([0, 0, W, 16], fill=t["accent"])
     # 인스타 릴스 화면은 위쪽 약 250px, 아래쪽 약 450px가 버튼·캡션에 가려져서 그 사이에 배치
-    d.text((pad, 300), cfg["account_name"], font=p.font(40), fill=t["accent"])
+    d.text((pad, 300), p.brand, font=p.font(40), fill=t["accent"])
     if post.get("weekly"):
         d.text((pad, 560), "이번 주 경제 총정리", font=p.font(52), fill=t["accent"])
     else:

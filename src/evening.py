@@ -138,7 +138,8 @@ def write(cfg: dict, articles: list[dict], morning_items: list[dict]) -> dict:
     kind = describe(now.date(), cfg)
     if kind.startswith("공휴일"):
         today += f" ({kind})"
-    prompt = PROMPT.format(account=cfg["account_name"], date=today, morning=morning, articles=listing)
+    from .dayoff import brand_name
+    prompt = PROMPT.format(account=brand_name(cfg), date=today, morning=morning, articles=listing)
     if kind:  # 쉬는 날엔 '퇴근길' 대신 '오늘의 이슈 한 장'
         prompt = prompt.replace("'퇴근길 이슈 한 장'", "'오늘의 이슈 한 장'") + OFFDAY_RULE.format(kind=kind)
     client = anthropic.Anthropic()
@@ -167,7 +168,7 @@ def caption(post: dict) -> str:
         ph = post["photo"]
         tail += [f"📷 사진: {ph.get('photographer') or ph.get('provider', '')} / {ph.get('provider', 'Pexels')}"]
     tail += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
-             " ".join(limit_hashtags(post.get("hashtags", [])) or [BRAND_TAG])]
+             " ".join(limit_hashtags(post.get("hashtags", [])))]
     tail_txt = "\n".join(tail)
     body = post["caption"].strip()
     room = 2200 - len(tail_txt) - 1  # 인스타 캡션 최대 2200자: 해시태그·출처는 꼭 남기고 본문을 줄임

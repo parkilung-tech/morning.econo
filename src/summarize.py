@@ -65,6 +65,9 @@ def limit_hashtags(tags: list[str]) -> list[str]:
         t = "#" + str(t).strip().lstrip("#").replace(" ", "")
         if len(t) > 1 and t != BRAND_TAG and t not in out:
             out.append(t)
+    from .dayoff import is_day_off
+    if is_day_off():  # 쉬는 날엔 '출근길' 계정 태그를 빼고 주제 태그만
+        return out[:MAX_HASHTAGS]
     return out[: MAX_HASHTAGS - 1] + [BRAND_TAG]
 
 
@@ -150,12 +153,12 @@ def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None 
     today = now.strftime("%Y년 %m월 %d일 ") + "월화수목금토일"[now.weekday()] + "요일"
     n = cfg["news_per_post"]
     task = (TASK_WEEKLY if week_items else TASK_DAILY).format(n=n)
-    from .dayoff import describe
+    from .dayoff import brand_name, describe
     kind = describe(now.date(), cfg)
     if kind.startswith("공휴일"):
         today += f" ({kind})"
     prompt = PROMPT.format(
-        account=cfg["account_name"], topic=cfg["topic"], task=task,
+        account=brand_name(cfg), topic=cfg["topic"], task=task,
         date=today, articles=listing,
     )
     if kind:  # 토·일·공휴일엔 출근길 표현 금지
@@ -204,5 +207,5 @@ def build_reel_caption(script: dict) -> str:
     """릴스는 짧게: 훅 + 질문 + 카드뉴스 안내 + 해시태그 3개."""
     reel = (script.get("reel_caption") or script.get("caption", "").split("\n")[0]).strip()
     tags = limit_hashtags(script.get("hashtags", []))
-    tags = tags[:2] + [BRAND_TAG]
+    tags = [t for t in tags if t != BRAND_TAG][:2] + ([BRAND_TAG] if BRAND_TAG in tags else [])
     return "\n".join([reel, "", "5가지 뉴스 전체는 오늘 아침 카드뉴스에서 👉 @morning.econo", "", " ".join(tags)])[:2200]
