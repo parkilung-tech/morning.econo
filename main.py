@@ -75,7 +75,8 @@ def publish():
     from src.publish import Instagram
 
     post = json.loads((OUT / "post.json").read_text(encoding="utf-8"))
-    if post.get("published_id"):
+    force = os.environ.get("FORCE_REPUBLISH") == "1"  # 수정본 다시 올리기 (기존 게시물은 앱에서 직접 삭제)
+    if post.get("published_id") and not force:
         print("이미 게시됨, 건너뜀")
         return
     repo = os.environ.get("GITHUB_REPOSITORY", "")

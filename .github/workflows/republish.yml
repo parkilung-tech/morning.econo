@@ -1,0 +1,33 @@
+name: republish-today
+
+# 오늘 아침 카드뉴스 수정본을 다시 게시 (새로 만들지 않고, 저장소에 있는 오늘 카드·캡션 그대로)
+# 기존 게시물은 인스타 앱에서 먼저 직접 삭제하세요
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: 오늘 카드뉴스 다시 게시
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          FORCE_REPUBLISH: "1"
+        run: python main.py publish
+      - name: 게시 기록 저장
+        if: always()
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output
+          git commit -m "republished $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push
