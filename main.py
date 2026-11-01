@@ -104,11 +104,11 @@ def _reel_todo():
         return None
     path = OUT / "post.json"
     if not path.exists():
-        print("오늘 카드뉴스가 없음, 릴스 건너뜀")
+        print("::warning::오늘 카드뉴스가 없음, 릴스 건너뜀")
         return None
     post = json.loads(path.read_text(encoding="utf-8"))
     if not post.get("published_id"):
-        print("오늘 카드뉴스가 아직 게시되지 않음, 릴스 건너뜀")
+        print("::warning::오늘 카드뉴스가 게시 기록이 없음, 릴스 건너뜀 (아침 게시 로그 확인)")
         return None
     if post.get("reel_id"):
         print("릴스 이미 게시됨, 건너뜀")

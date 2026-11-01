@@ -1,6 +1,7 @@
 """Instagram API (Instagram 로그인 방식)로 캐러셀 게시."""
 import os
 import time
+from datetime import datetime, timezone
 
 import requests
 
@@ -19,6 +20,41 @@ class Instagram:
         if not r.ok:
             raise RuntimeError(f"인스타 API 오류 {r.status_code}: {r.text}")
         return r.json()
+
+    def _publish(self, creation_id, caption: str) -> str:
+        """최종 게시. 인스타가 오류를 돌려줘도 실제로는 올라가는 경우가 있어서,
+        오류가 나면 최근 게시물을 확인해 같은 글이 방금 올라갔으면 성공으로 처리."""
+        try:
+            return self._post(f"{self.user_id}/media_publish", creation_id=creation_id)["id"]
+        except RuntimeError as err:
+            print(f"게시 요청 오류, 실제로 올라갔는지 확인 중: {err}")
+            for _ in range(3):
+                time.sleep(20)
+                found = self._find_recent(caption)
+                if found:
+                    print(f"오류 응답이었지만 실제로 게시됨: {found}")
+                    return found
+            raise
+
+    def _find_recent(self, caption: str, within_min=20):
+        """방금(within_min분 이내) 올라간 게시물 중 캡션 앞부분이 같은 것의 id."""
+        try:
+            r = requests.get(
+                f"{self.base}/{self.user_id}/media",
+                params={"fields": "id,caption,timestamp", "limit": 5, "access_token": self.token},
+                timeout=30,
+            ).json()
+        except requests.RequestException:
+            return None
+        head = (caption or "").strip()[:40]
+        now = datetime.now(timezone.utc)
+        for m in r.get("data", []):
+            ts = datetime.strptime(m["timestamp"], "%Y-%m-%dT%H:%M:%S%z")
+            if (now - ts).total_seconds() > within_min * 60:
+                continue
+            if (m.get("caption") or "").strip()[:40] == head:
+                return m["id"]
+        return None
 
     def _wait_ready(self, container_id, tries=30):
         for _ in range(tries):
@@ -49,15 +85,13 @@ class Instagram:
             share_to_feed="true" if share_to_feed else "false",
         )
         self._wait_ready(c["id"], tries=60)  # 영상은 인스타 쪽 처리에 1~3분 걸림
-        res = self._post(f"{self.user_id}/media_publish", creation_id=c["id"])
-        return res["id"]
+        return self._publish(c["id"], caption)
 
     def publish_image(self, image_url: str, caption: str) -> str:
         """사진 한 장 게시."""
         c = self._post(f"{self.user_id}/media", image_url=image_url, caption=caption)
         self._wait_ready(c["id"])
-        res = self._post(f"{self.user_id}/media_publish", creation_id=c["id"])
-        return res["id"]
+        return self._publish(c["id"], caption)
 
     def publish_carousel(self, image_urls: list[str], caption: str) -> str:
         children = []
@@ -71,5 +105,4 @@ class Instagram:
             media_type="CAROUSEL", children=",".join(children), caption=caption,
         )
         self._wait_ready(parent["id"])
-        res = self._post(f"{self.user_id}/media_publish", creation_id=parent["id"])
-        return res["id"]
+        return self._publish(parent["id"], caption)
