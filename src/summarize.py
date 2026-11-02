@@ -26,24 +26,31 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 주제는
 - points는 정확히 3개, 각 32자 이내. 마지막 항목은 '그래서 나한테 무슨 의미?' 관점.
 - tag는 2~4자 분야명 (예: 금리, 부동산, 증시, 환율, 산업).
 - items는 가장 임팩트 큰 뉴스를 첫 번째로 놓아.
-- cover_title은 첫 번째 뉴스의 핵심을 한 줄로 쓴 헤드라인이야. 숫자가 있으면 꼭 넣어 (예: 메타 8천 명 감원, 경상흑자 日·獨 추월).
+- cover_title은 표지 제목이야. 언론사 헤드라인처럼 사실만 옮기지 말고, 독자가 '그래서 나한테 무슨 상관?'에 바로 끌리게
+  첫 번째 뉴스를 내 월급·대출·물가·일자리·투자와 연결해서 써. 숫자가 있으면 꼭 넣어.
+  좋은 예: 수출 역대 최대, 내 월급은? / 금리 동결, 대출이자 그대로 / 코스피 6% 급등, 내 연금도? / 3분기 1.0% 성장, 체감은?
+  나쁜 예: 수출 9천억弗, 1조 눈앞 (기사 제목 그대로) / 메타 8천 명 감원 (나와의 연결 없음)
+  단, 카드 안 내용으로 답할 수 있는 것만 쓰고 과장·낚시·불안 조장 금지. 기사에 없는 결과를 단정하지 마.
   계정 이름, '경제 한 잔', 요일, '오늘의 뉴스' 같은 일반적인 말은 절대 쓰지 마.
 - cover_subtitle은 나머지 뉴스를 짧게 예고 (예: 환율·GDP·AI 거품까지 4가지 더).
 - source는 언론사 이름.
 - caption은 4~6줄, 첫 줄은 궁금증을 일으키는 훅. 끝에서 두 번째 줄은 오늘 뉴스와 관련해 독자가 댓글로 답하기 쉬운 질문 한 줄 (예: 성장률 소식, 체감되시나요?). 마지막 줄은 '이 소식 필요한 동료에게 보내주세요' 같은 공유 유도 한 줄. 줄바꿈은 \\n으로 표시.
+- reel_hook은 릴스 첫 화면에 크게 뜨는 질문 한 줄이야. 16자 이내, 물음표로 끝내.
+  직장인이 스크롤하다 '어, 내 얘기네' 하고 멈출 질문으로 (예: 수출 최대인데 내 월급은? / 대출이자 또 오를까?).
+  cover_title과 똑같이 쓰지 말고, 첫 번째 뉴스가 그 질문의 답이 되게 써. 과장·낚시 금지.
 - reel_caption은 릴스용 짧은 캡션 2줄. 첫 줄은 오늘 가장 큰 뉴스의 숫자를 넣은 훅, 둘째 줄은 댓글 질문 한 줄. 해시태그 넣지 마.
 - hashtags는 정확히 4개, '#' 포함. 오늘 뉴스 주제에 딱 맞는 것으로 대형 1개 + 중소형 3개 (예: #경제뉴스 #코스피 #금리 #재테크). 계정 태그는 자동으로 붙으니 넣지 마.
 - 요일을 언급할 때는 아래 '오늘 날짜'의 요일만 써. 다른 요일(예: 내일, 다음 출근일)을 짐작해서 쓰지 마.
 - 중요: 모든 문자열 값 안에는 큰따옴표를 절대 쓰지 마. 인용이 필요하면 작은따옴표(')나 「」를 써.
 
 오늘 날짜: {date}
-
+{recent}
 후보 기사:
 {articles}
 
 아래 JSON만 출력해 (설명·코드블록 없이). 키 순서를 지켜:
-{{"cover_title": "...(14자 이내)", "cover_subtitle": "...(24자 이내)",
-  "caption": "...", "reel_caption": "...", "hashtags": ["#..."],
+{{"cover_title": "...(16자 이내)", "cover_subtitle": "...(24자 이내)",
+  "caption": "...", "reel_hook": "...(16자 이내, ?로 끝)", "reel_caption": "...", "hashtags": ["#..."],
   "items": [{{"tag": "...", "headline": "...", "points": ["...","...","..."], "source": "..."}}]}}
 """
 
@@ -126,6 +133,9 @@ def _validate(data: dict, n: int) -> dict:
         tags = DEFAULT_HASHTAGS
     data["hashtags"] = limit_hashtags(tags)
 
+    hook = str(data.get("reel_hook") or "").strip()
+    data["reel_hook"] = hook if hook.endswith("?") else (hook + "?" if hook else "")
+
     reel = data.get("reel_caption")
     if not isinstance(reel, str) or not reel.strip():
         reel = data["caption"].split("\n")[0]
@@ -133,8 +143,16 @@ def _validate(data: dict, n: int) -> dict:
     return data
 
 
-def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None = None) -> dict:
-    """week_items가 있으면 '이번 주 총정리' 원고, 없으면 평소 원고."""
+RECENT_RULE = """
+[어제 저녁에 이미 다룬 이슈] — 아래와 같은 주제는 오늘 새로 나온 숫자·발표가 없으면 고르지 마. 같은 뉴스를 연달아 보여주지 않기 위해서야.
+{lines}
+"""
+
+
+def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None = None,
+                 recent: list[str] | None = None) -> dict:
+    """week_items가 있으면 '이번 주 총정리' 원고, 없으면 평소 원고.
+    recent: 바로 전에 다룬 이슈 제목들 (겹치지 않게 피함)"""
     if not articles and not week_items:
         raise RuntimeError("새 기사가 없어서 오늘은 건너뜁니다.")
     listing = "\n".join(
@@ -160,6 +178,7 @@ def write_script(cfg: dict, articles: list[dict], week_items: list[dict] | None 
     prompt = PROMPT.format(
         account=brand_name(cfg), topic=cfg["topic"], task=task,
         date=today, articles=listing,
+        recent=RECENT_RULE.format(lines="\n".join(f"- {r}" for r in recent)) if recent and not week_items else "",
     )
     if kind:  # 토·일·공휴일엔 출근길 표현 금지
         prompt += OFFDAY_RULE.format(kind=kind)

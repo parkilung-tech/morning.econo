@@ -16,7 +16,8 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 고르는 기준:
 - 여러 언론사가 함께 다룬 주제일수록 이슈가 큰 거야. 비슷한 기사가 많은 주제를 우선해.
 - 직장인의 지갑·일자리·투자에 영향이 큰 뉴스를 우선해.
-- 오늘 아침 카드뉴스에서 이미 다룬 뉴스도 골라도 돼. 그럴 땐 아침 이후 나온 새 내용과 의미를 더 깊게 써.
+- 오늘 아침 카드뉴스에서 이미 다룬 주제는 고르지 마. 같은 뉴스를 하루에 두 번 보여주면 도달이 나뉘어서 둘 다 손해야.
+  예외: 아침 이후 그 주제에 새 숫자·공식 발표 같은 큰 전개가 있을 때만. 그럴 땐 새로 나온 내용이 중심이 되게 써.
 
 규칙:
 - 후보 기사에 나온 사실과 숫자만 써. 기사에 없는 숫자·전망·원인은 지어내지 마. 확실하지 않으면 빼.
@@ -26,7 +27,10 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 
 각 항목 길이 (꼭 지켜, 한 장에 들어가야 해):
 - tag: 분야명 2~4자 (예: 금리, 증시, 부동산, 환율, 고용)
-- title: 16자 이내 헤드라인, 숫자가 있으면 넣기
+- title: 16자 이내 헤드라인, 숫자가 있으면 넣기. 기사 제목을 그대로 옮기지 말고 '그래서 나한테 무슨 상관?'이 보이게
+  내 월급·대출·물가·일자리·투자와 연결해 (예: 금리 동결, 대출이자 그대로 / 수출 역대 최대, 내 월급은?). 과장·낚시 금지.
+- hook: 릴스 첫 화면에 크게 뜨는 질문 한 줄, 16자 이내, 물음표로 끝. title과 다르게, 이 뉴스가 답이 되는 질문으로
+  (예: 대출이자 또 오를까? / 전세값 왜 또 뛰지?).
 - one_line: 한 줄 요약 30자 이내
 - what: 무슨 일인지 2문장, 합쳐서 70자 이내
 - numbers: 기사에 나온 핵심 숫자 2~3개. value는 8자 이내(예: 1.0%, 3조 원), label은 12자 이내. 기사에 숫자가 없으면 빈 배열 []
@@ -74,7 +78,7 @@ PROMPT = """너는 인스타그램 '{account}' 계정의 에디터야. 지금은
 {articles}
 
 아래 JSON만 출력해 (설명·코드블록 없이):
-{{"tag": "...", "title": "...", "one_line": "...", "what": "...",
+{{"tag": "...", "title": "...", "hook": "...", "one_line": "...", "what": "...",
   "numbers": [{{"value": "...", "label": "..."}}], "why": ["..."], "impact": ["...", "..."],
   "watch": "...", "sources": ["..."], "caption": "...", "hashtags": ["#..."],
   "photo_queries": ["...", "...", "..."]}}
@@ -98,6 +102,7 @@ def _validate(data: dict) -> dict:
     out = {
         "tag": str(data.get("tag") or "경제")[:5],
         "title": str(data["title"]).strip(),
+        "hook": str(data.get("hook") or "").strip(),
         "one_line": str(data.get("one_line") or "").strip(),
         "what": str(data.get("what") or "").strip(),
         "why": _strs(data.get("why"), 2),
@@ -167,7 +172,7 @@ def caption(post: dict) -> str:
     if post.get("photo"):
         ph = post["photo"]
         tail += [f"📷 사진: {ph.get('photographer') or ph.get('provider', '')} / {ph.get('provider', 'Pexels')}"]
-    tail += ["", "☕ 아침 7시 전엔 오늘의 경제뉴스 5가지 카드뉴스가 올라와요", "",
+    tail += ["", "☕ 아침 7시엔 그날 경제뉴스 5가지를 카드뉴스로 정리해드려요 👉 @morning.econo", "",
              " ".join(limit_hashtags(post.get("hashtags", [])))]
     tail_txt = "\n".join(tail)
     body = post["caption"].strip()
@@ -328,6 +333,10 @@ class EveningPainter(Painter):
                     break
             d.text((W - PAD - d.textlength(src, font=sf), H - 78), src, font=sf, fill=self.sub)
         return img, y
+
+
+def theme(cfg: dict) -> dict:
+    return {**DEFAULT_THEME, **(cfg.get("evening_theme") or {})}
 
 
 def render(cfg: dict, post: dict, out: Path, photo_path: Path | None = None) -> Path:

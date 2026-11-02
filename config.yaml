@@ -79,6 +79,8 @@ image_base_url: "https://raw.githubusercontent.com/{repo}/main/output"
 evening_enabled: true       # false로 바꾸면 저녁 게시 안 함
 evening_hour: 18            # 게시 시각 (한국시간, 시)
 evening_photo: true         # 위쪽에 관련 사진 넣기 (Pixabay 무료 사진, PIXABAY_API_KEY 필요)
+evening_format: "reel"      # "reel" = 릴스로 게시(피드는 아침 카드뉴스 하루 1개만) / "feed" = 예전처럼 피드 사진
+evening_reel_card_seconds: 9  # 저녁 릴스에서 이슈 카드를 보여줄 초 (읽을 시간)
 # evening_theme:            # 색을 바꾸고 싶으면 주석을 풀고 수정 (기본: 노을 톤)
 #   background: "#1B1020"
 #   card: "#2B1B33"

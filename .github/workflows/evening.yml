@@ -1,6 +1,6 @@
 name: evening-issue
 
-# 매일 오후 6시: 오늘 가장 이슈가 된 경제뉴스 1개를 한 장으로 정리해 게시
+# 매일 오후 6시: 오늘 가장 이슈가 된 경제뉴스 1개를 한 장으로 정리해 릴스로 게시 (config evening_format)
 # GitHub 예약 실행은 몇 분씩 늦게 시작될 때가 있어서 17:35에 시작 → 준비 후 18:00까지 기다렸다 게시
 on:
   schedule:
@@ -25,8 +25,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 한글 폰트 설치
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: 한글 폰트 + 영상 도구 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk ffmpeg
 
       - run: pip install -r requirements.txt
 
@@ -37,18 +37,21 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python main.py evening-build
 
-      - name: 이미지 업로드 (공개 주소 만들기)
+      - name: 이미지·영상 업로드 (공개 주소 만들기)
+        id: push
         run: |
           git config user.name "news-bot"
           git config user.email "news-bot@users.noreply.github.com"
           git add output data
           git commit -m "evening $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
           git pull --rebase -q && git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: 오후 6시에 인스타그램 게시
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          REEL_SHA: ${{ steps.push.outputs.sha }}
         run: python main.py evening-publish
 
       - name: 게시 기록 저장

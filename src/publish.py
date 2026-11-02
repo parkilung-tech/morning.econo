@@ -77,12 +77,14 @@ class Instagram:
         ).json()
         return r
 
-    def publish_reel(self, video_url: str, caption: str, share_to_feed=False) -> str:
-        """공개 영상 주소로 릴스 게시 (Instagram 로그인 방식은 video_url이 필수)."""
+    def publish_reel(self, video_url: str, caption: str, share_to_feed=False, thumb_offset_ms=1600) -> str:
+        """공개 영상 주소로 릴스 게시 (Instagram 로그인 방식은 video_url이 필수).
+        thumb_offset_ms: 표지로 쓸 장면 위치. 훅 질문·답이 다 나온 1.6초 지점."""
         c = self._post(
             f"{self.user_id}/media",
             media_type="REELS", video_url=video_url, caption=caption,
             share_to_feed="true" if share_to_feed else "false",
+            thumb_offset=str(thumb_offset_ms),
         )
         self._wait_ready(c["id"], tries=60)  # 영상은 인스타 쪽 처리에 1~3분 걸림
         return self._publish(c["id"], caption)

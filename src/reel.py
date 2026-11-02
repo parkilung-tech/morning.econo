@@ -1,92 +1,51 @@
 """카드 이미지(4:5)들 → 릴스용 세로 영상(1080x1920, 9:16). ffmpeg 필요."""
-import subprocess
 import tempfile
 from datetime import date
 from pathlib import Path
 
-from PIL import Image, ImageDraw
-
-from .render import WEEKDAYS, Painter, pick_theme
-
-W, H, FPS = 1080, 1920, 30
-FADE = 0.4  # 카드 사이 전환 길이(초)
-HOOK_SEC = 2.0  # 첫 장면(헤드라인 큰 글씨) 길이
+from .motion import HOOK_SEC, hook_frames, pick_bgm, render_video
+from .render import WEEKDAYS, pick_theme
 
 
-def make_hook(cfg: dict, post: dict, out: Path, day: date) -> Path:
-    """릴스 첫 장면: 세로 화면 가득 그날 헤드라인. 릴스는 첫 1초에 넘길지 정해져서 글씨를 크게."""
-    t = pick_theme(cfg, day)
-    p = Painter(cfg, day)
-    img = Image.new("RGB", (W, H), t["background"])
-    d = ImageDraw.Draw(img)
-    pad = 90
-    d.rectangle([0, 0, W, 16], fill=t["accent"])
-    # 인스타 릴스 화면은 위쪽 약 250px, 아래쪽 약 450px가 버튼·캡션에 가려져서 그 사이에 배치
-    d.text((pad, 300), p.brand, font=p.font(40), fill=t["accent"])
-    if post.get("weekly"):
-        d.text((pad, 560), "이번 주 경제 총정리", font=p.font(52), fill=t["accent"])
-    else:
-        date_txt = f"{day.strftime('%m.%d')} {WEEKDAYS[day.weekday()]}요일 경제뉴스"
-        d.text((pad, 560), date_txt, font=p.font(46, bold=False), fill=t["subtext"])
-    y = p.block(d, (pad, 650), post["cover_title"], p.font(132), t["text"], W - 2 * pad, 1.18)
-    d.rectangle([pad, y + 30, pad + 160, y + 44], fill=t["accent"])
-    if post.get("cover_subtitle") and not post.get("weekly"):
-        p.block(d, (pad, y + 100), post["cover_subtitle"], p.font(54, bold=False), t["subtext"], W - 2 * pad)
-    d.text((pad, 1380), cfg["handle"], font=p.font(40, bold=False), fill=t["subtext"])
-    img.save(out, "JPEG", quality=92)
-    return out
-
-
-def _pick_bgm(folder: str, day: date) -> Path | None:
-    files = sorted(
-        p for p in Path(folder).glob("*")
-        if p.suffix.lower() in (".mp3", ".m4a", ".wav", ".aac")
-    ) if Path(folder).is_dir() else []
-    return files[day.toordinal() % len(files)] if files else None  # 날마다 다른 곡
+def hook_question(post: dict) -> str:
+    q = (post.get("reel_hook") or "").strip()
+    if q:
+        return q
+    tag = (post.get("items") or [{}])[0].get("tag") or "경제"
+    return f"{tag} 뉴스, 내 지갑엔 무슨 일?"
 
 
 def make_reel(cfg: dict, images: list[Path], out: Path, day: date, post: dict | None = None) -> Path:
+    """첫 장면 = 움직이는 질문형 훅, 이후 뉴스 카드들(표지는 훅과 겹쳐서 뺌)."""
     images = list(images)
-    if post:  # 작은 글씨 목록이 있는 표지 대신, 큰 헤드라인 첫 장면으로 시작
-        images[0] = make_hook(cfg, post, Path(tempfile.gettempdir()) / "reel_hook.jpg", day)
-    n = len(images)
+    theme = pick_theme(cfg, day)
     sec = float(cfg.get("reel_seconds_per_card", 3))
-    durs = [sec] * n
-    durs[0] = HOOK_SEC if post else max(2.0, sec - 0.5)
-    durs[-1] = sec + 0.5           # 마지막 장은 조금 길게
-    total = sum(durs) - FADE * (n - 1)
-    bg = pick_theme(cfg, day)["background"].lstrip("#")
-    bgm = _pick_bgm(cfg.get("reel_bgm_dir", "assets/bgm"), day)
-
-    cmd = ["ffmpeg", "-y", "-loglevel", "error"]
-    for img, d in zip(images, durs):
-        cmd += ["-loop", "1", "-framerate", str(FPS), "-t", f"{d:.3f}", "-i", str(img)]
-    if bgm:
-        cmd += ["-stream_loop", "-1", "-i", str(bgm)]
-    else:
-        cmd += ["-f", "lavfi", "-t", f"{total:.3f}", "-i", "anullsrc=r=48000:cl=stereo"]
-
-    parts = [
-        f"[{i}:v]scale={W}:-2:flags=lanczos,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x{bg},"
-        f"setsar=1,format=yuv420p,fps={FPS}[v{i}]"
-        for i in range(n)
-    ]
-    last, offset = "v0", 0.0
-    for i in range(1, n):
-        offset += durs[i - 1] - FADE
-        parts.append(f"[{last}][v{i}]xfade=transition=fade:duration={FADE}:offset={offset:.3f}[x{i}]")
-        last = f"x{i}"
-    parts.append(
-        f"[{n}:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,volume=0.8,"
-        f"afade=t=in:d=0.3,afade=t=out:st={max(0, total - 1):.3f}:d=1[a]"
-    )
-
-    cmd += [
-        "-filter_complex", ";".join(parts), "-map", f"[{last}]", "-map", "[a]",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
-        "-movflags", "+faststart", "-t", f"{total:.3f}", str(out),
-    ]
-    subprocess.run(cmd, check=True)
+    scenes = []
+    if post:
+        label = "이번 주 경제 총정리" if post.get("weekly") else \
+            f"{day.strftime('%m.%d')} {WEEKDAYS[day.weekday()]}요일 경제뉴스"
+        answer = post["items"][0]["headline"] if post.get("items") else post.get("cover_title", "")
+        pattern = hook_frames(cfg, theme, day, hook_question(post), answer, label,
+                              Path(tempfile.mkdtemp(prefix="reel_hook_")))
+        scenes.append((pattern, HOOK_SEC, True))
+        images = images[1:]  # 글씨 작은 표지 대신 훅으로 시작
+    for i, img in enumerate(images):
+        scenes.append((str(img), sec + (0.5 if i == len(images) - 1 else 0), False))  # 마지막 장은 조금 길게
+    bgm = pick_bgm(cfg.get("reel_bgm_dir", "assets/bgm"), day)
+    total = render_video(scenes, out, theme["background"], bgm)
     print(f"릴스 영상 생성: {out} ({total:.1f}초, 음원: {bgm.name if bgm else '없음'})")
+    return out
+
+
+def make_evening_reel(cfg: dict, card: Path, post: dict, theme: dict, out: Path, day: date) -> Path:
+    """저녁 이슈 한 장 → 릴스: 질문형 훅 → 이슈 카드(읽을 시간 넉넉히)."""
+    from .dayoff import is_day_off
+    label = "오늘의 이슈 한 장" if is_day_off(day, cfg) else "퇴근길 이슈 한 장"
+    q = (post.get("hook") or "").strip() or f"{post.get('tag', '경제')} 이슈, 나한테 무슨 상관?"
+    pattern = hook_frames(cfg, theme, day, q, post["title"], label,
+                          Path(tempfile.mkdtemp(prefix="evening_hook_")))
+    scenes = [(pattern, HOOK_SEC, True), (str(card), float(cfg.get("evening_reel_card_seconds", 9)), False)]
+    bgm = pick_bgm(cfg.get("reel_bgm_dir", "assets/bgm"), day)
+    total = render_video(scenes, out, theme["background"], bgm)
+    print(f"저녁 릴스 생성: {out} ({total:.1f}초)")
     return out

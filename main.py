@@ -48,6 +48,20 @@ def this_week_items() -> list[dict]:
     return items
 
 
+def recent_issues() -> list[str]:
+    """어제 저녁 이슈 제목 (오늘 아침에 같은 뉴스를 또 고르지 않게)."""
+    yday = datetime.now(KST).date() - timedelta(days=1)
+    path = Path("output") / yday.isoformat() / "evening.json"
+    if not path.exists():
+        return []
+    ev = json.loads(path.read_text(encoding="utf-8"))
+    return [f"{ev.get('title', '')} — {ev.get('one_line', '')}".strip(" —")] if ev.get("title") else []
+
+
+def evening_as_reel() -> bool:
+    return CFG.get("evening_format", "reel") == "reel"
+
+
 def build():
     from src import fetch_news, summarize
 
@@ -62,7 +76,7 @@ def build():
     week_items = this_week_items() if is_recap_day() else []
     if week_items:
         print(f"이번 주 총정리: 이번 주 뉴스 {len(week_items)}건 + 오늘 기사")
-    script = summarize.write_script(CFG, articles, week_items)
+    script = summarize.write_script(CFG, articles, week_items, recent_issues())
     paths = render.render_all(CFG, script, OUT)
     script["caption_full"] = summarize.build_caption(script)
     script["images"] = [p.name for p in paths]
@@ -95,6 +109,25 @@ def publish():
     post["published_id"] = media_id
     (OUT / "post.json").write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"게시 완료: {media_id}")
+
+
+def _video_url(name: str) -> str:
+    """jsDelivr는 GitHub 공개 저장소 파일을 video/mp4 형식으로 내보내줌.
+    커밋 번호(REEL_SHA)를 주소에 넣어 캐시된 옛 파일이 나가지 않게 함."""
+    repo = os.environ["GITHUB_REPOSITORY"]
+    sha = os.environ.get("REEL_SHA", "main")
+    return f"https://cdn.jsdelivr.net/gh/{repo}@{sha}/output/{TODAY}/{name}"
+
+
+def _wait_url(url: str) -> str:
+    """푸시 직후 반영 지연 대비: 주소가 열릴 때까지 최대 2분 기다림."""
+    for _ in range(12):
+        r = requests.head(url, timeout=15, allow_redirects=True)
+        if r.status_code == 200:
+            print(f"주소 확인: {url} ({r.headers.get('content-type')})")
+            return url
+        time.sleep(10)
+    raise RuntimeError(f"주소 접근 불가: {url}")
 
 
 def _reel_todo():
@@ -138,19 +171,7 @@ def reel_publish():
         raise RuntimeError("reel.mp4가 없음 (reel-build 먼저 실행)")
     from src.publish import Instagram
 
-    # jsDelivr는 GitHub 공개 저장소 파일을 video/mp4 형식으로 내보내줌.
-    # 커밋 번호(REEL_SHA)를 주소에 넣어 캐시된 옛 파일이 나가지 않게 함.
-    repo = os.environ["GITHUB_REPOSITORY"]
-    sha = os.environ.get("REEL_SHA", "main")
-    url = f"https://cdn.jsdelivr.net/gh/{repo}@{sha}/output/{TODAY}/reel.mp4"
-    for _ in range(12):
-        r = requests.head(url, timeout=15, allow_redirects=True)
-        if r.status_code == 200:
-            break
-        time.sleep(10)
-    else:
-        raise RuntimeError(f"영상 주소 접근 불가: {url}")
-    print(f"영상 주소: {url} ({r.headers.get('content-type')})")
+    url = _wait_url(_video_url("reel.mp4"))
 
     ig = Instagram(CFG["graph_api_version"])
     from src.summarize import build_reel_caption
@@ -186,7 +207,11 @@ def evening_build():
             post["photo"], photo_path = info, OUT / "evening_photo.jpg"
     evening.render(CFG, post, OUT / "evening.jpg", photo_path)
     post["caption_full"] = evening.caption(post)
-    OUT.mkdir(parents=True, exist_ok=True)
+    if evening_as_reel():  # 피드는 아침 카드뉴스 하루 1개만 → 저녁은 릴스로
+        from src.reel import make_evening_reel
+        make_evening_reel(CFG, OUT / "evening.jpg", post, evening.theme(CFG), OUT / "evening.mp4",
+                          datetime.now(KST).date())
+        post["format"] = "reel"
     path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"저녁 이슈: {post['title']} → {OUT / 'evening.jpg'}")
 
@@ -207,19 +232,16 @@ def evening_publish():
         print(f"오후 {target:%H:%M}까지 {wait / 60:.0f}분 대기")
         time.sleep(wait)
 
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    base = CFG["image_base_url"].format(repo=repo).rstrip("/")
-    url = f"{base}/{TODAY}/evening.jpg"
-    for _ in range(12):
-        if requests.head(url, timeout=15).status_code == 200:
-            break
-        time.sleep(10)
-    else:
-        raise RuntimeError(f"이미지 주소 접근 불가: {url}")
-
     from src.publish import Instagram
     ig = Instagram(CFG["graph_api_version"])
-    post["published_id"] = ig.publish_image(url, post["caption_full"])
+    if post.get("format") == "reel" and (OUT / "evening.mp4").exists():
+        url = _wait_url(_video_url("evening.mp4"))
+        post["published_id"] = ig.publish_reel(url, post["caption_full"], share_to_feed=False)
+    else:
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        base = CFG["image_base_url"].format(repo=repo).rstrip("/")
+        url = _wait_url(f"{base}/{TODAY}/evening.jpg")
+        post["published_id"] = ig.publish_image(url, post["caption_full"])
     path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"저녁 게시 완료: {post['published_id']}")
 
