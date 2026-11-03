@@ -6,6 +6,8 @@
   python main.py reel-publish  # 저장소에 올라간 reel.mp4를 릴스로 게시
   python main.py evening-build    # 저녁: 오늘 가장 큰 이슈 1개를 한 장으로 (evening.jpg)
   python main.py evening-publish  # 저녁 한 장을 오후 6시에 게시
+  python main.py threads          # 아침 카드뉴스를 스레드 요약 글로 게시
+  python main.py threads-preview  # 스레드 글만 만들어 보기 (게시 X)
   python main.py sample    # API 키 없이 샘플 원고로 카드만 만들어보기
 """
 import json
@@ -246,6 +248,39 @@ def evening_publish():
     print(f"저녁 게시 완료: {post['published_id']}")
 
 
+def threads(dry_run: bool = False):
+    """아침 카드뉴스를 스레드용 요약 글로 바꿔 게시 (인스타 게시가 끝난 뒤 실행)."""
+    if not CFG.get("threads_enabled", True):
+        print("스레드 게시 꺼져 있음 (config.yaml threads_enabled)")
+        return
+    path = OUT / "post.json"
+    if not path.exists():
+        print("::warning::오늘 카드뉴스가 없음, 스레드 건너뜀")
+        return
+    post = json.loads(path.read_text(encoding="utf-8"))
+    if post.get("threads_id") and not dry_run:
+        print("스레드 이미 게시됨, 건너뜀")
+        return
+    from src import threads as th
+
+    text = th.compose(CFG, post)
+    print(f"----- 스레드 글 ({len(text)}자) -----\n{text}\n-----")
+    if dry_run:
+        return
+    if not os.environ.get("THREADS_ACCESS_TOKEN"):
+        print("::warning::THREADS_ACCESS_TOKEN Secret이 없어 스레드 게시 건너뜀 (README 6단계)")
+        return
+    urls = None
+    if CFG.get("threads_attach_cards", False):
+        repo = os.environ.get("GITHUB_REPOSITORY", "")
+        base = CFG["image_base_url"].format(repo=repo).rstrip("/")
+        urls = [f"{base}/{TODAY}/{name}" for name in post["images"]]
+    post["threads_id"] = th.Threads().publish(text, urls)
+    post["threads_text"] = text
+    path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"스레드 게시 완료: {post['threads_id']}")
+
+
 def sample():
     script = json.loads(Path("sample_script.json").read_text(encoding="utf-8"))
     script["date"] = datetime.now(KST).strftime("%Y.%m.%d")
@@ -256,4 +291,5 @@ def sample():
 if __name__ == "__main__":
     {"build": build, "publish": publish, "reel-build": reel_build,
      "reel-publish": reel_publish, "evening-build": evening_build,
-     "evening-publish": evening_publish, "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()
+     "evening-publish": evening_publish, "threads": threads,
+     "threads-preview": lambda: threads(dry_run=True), "sample": sample}[sys.argv[1] if len(sys.argv) > 1 else "build"]()

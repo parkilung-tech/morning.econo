@@ -98,3 +98,7 @@ reel_enabled: true          # false로 바꾸면 릴스는 안 올림
 reel_seconds_per_card: 3    # 카드 한 장당 보여줄 초
 reel_bgm_dir: "assets/bgm"  # 저작권 없는 음원(mp3)을 넣는 폴더. 비어 있으면 무음
 reel_share_to_feed: false   # true면 피드 그리드에도 노출 (카드뉴스와 겹쳐 보임)
+
+# ===== 스레드 =====
+threads_enabled: true        # false로 바꾸면 스레드 게시 안 함
+threads_attach_cards: false  # true면 요약 글에 카드 이미지도 같이 올림 (캐러셀)

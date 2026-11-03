@@ -1,0 +1,37 @@
+name: threads-post
+
+# 평소엔 daily-post가 인스타 게시 직후 스레드도 같이 올림.
+# 이 워크플로는 실패했을 때 다시 올리거나, 오늘 것을 수동으로 올릴 때 쓰는 버튼.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  threads:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: 스레드 게시
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: python main.py threads
+
+      - name: 게시 기록 저장
+        if: always()
+        run: |
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git add output
+          git commit -m "threads $(TZ=Asia/Seoul date +%F)" || echo "변경 없음"
+          git pull --rebase -q && git push

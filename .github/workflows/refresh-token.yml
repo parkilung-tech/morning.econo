@@ -21,3 +21,16 @@ jobs:
           echo "::add-mask::$NEW"
           gh secret set IG_ACCESS_TOKEN --body "$NEW" --repo "$GITHUB_REPOSITORY"
           echo "토큰 연장 완료"
+
+      - name: 스레드 토큰 연장 후 Secret 갱신
+        env:
+          OLD_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$OLD_TOKEN" ]; then echo "스레드 토큰 없음, 건너뜀"; exit 0; fi
+          RESP=$(curl -s "https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=${OLD_TOKEN}")
+          NEW=$(echo "$RESP" | jq -r '.access_token // empty')
+          if [ -z "$NEW" ]; then echo "스레드 갱신 실패: $RESP"; exit 1; fi
+          echo "::add-mask::$NEW"
+          gh secret set THREADS_ACCESS_TOKEN --body "$NEW" --repo "$GITHUB_REPOSITORY"
+          echo "스레드 토큰 연장 완료"

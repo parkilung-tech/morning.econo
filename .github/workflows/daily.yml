@@ -42,6 +42,14 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
         run: python main.py publish
 
+      - name: 스레드 게시
+        continue-on-error: true   # 스레드가 실패해도 인스타 게시 기록은 저장
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+        run: python main.py threads
+
       # 릴스는 점심 시간에 reel.yml에서 따로 올림
 
       - name: 게시 기록 저장

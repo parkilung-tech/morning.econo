@@ -79,3 +79,26 @@ https://console.anthropic.com → API Keys에서 발급 (하루 1회 실행이�
 - **투자 조언 금지**: 종목 추천처럼 보이는 표현은 쓰지 않게 프롬프트에 넣어두었습니다
 - **API 한도**: 24시간에 100개 게시까지 (하루 1개면 여유 충분)
 - 매일 아침 결과물을 한 번 훑어보세요. AI 요약도 가끔 틀립니다
+
+## 6. 스레드 자동 게시 (선택, 15분)
+
+매일 아침 인스타 카드뉴스가 올라간 직후, 같은 뉴스를 스레드용 요약 글로 바꿔 자동 게시해요.
+
+1. https://developers.facebook.com → 내 앱 → **앱 만들기** → 사용 사례 **Threads API 액세스** 선택
+   (기존 인스타 앱에 사용 사례 추가가 안 되면 새 앱으로 만들면 돼요)
+2. 사용 사례 → 맞춤 설정 → 권한 `threads_basic`, `threads_content_publish` 추가
+3. 앱 역할 → 역할 → **Threads 테스터**로 내 스레드 계정(@morning.econo) 추가
+   → 스레드 앱 설정 → 계정 → 웹사이트 권한 → 초대에서 **수락**
+4. 사용 사례 → 설정 → **User Token Generator**에서 토큰 생성 후 복사
+5. 저장소 Secrets에 추가
+
+| 이름 | 값 |
+|---|---|
+| `THREADS_ACCESS_TOKEN` | 4번에서 받은 토큰 |
+| `THREADS_USER_ID` | (선택) 스레드 사용자 ID. 비워두면 토큰 주인 계정으로 자동 게시 |
+
+6. Actions 탭 → `threads-post` → **Run workflow** 로 오늘 글 테스트 게시
+
+- 다음 날부터는 `daily-post`가 인스타 게시 직후 스레드도 같이 올려요. Secret이 없으면 스레드만 조용히 건너뜀
+- 스레드 토큰도 매월 1일·15일 인스타 토큰과 함께 자동 연장
+- 카드 이미지까지 같이 올리고 싶으면 `config.yaml`의 `threads_attach_cards: true`
