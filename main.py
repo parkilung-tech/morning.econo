@@ -34,7 +34,7 @@ def is_recap_day() -> bool:
 
 
 def this_week_items() -> list[dict]:
-    """이번 주 월요일~어제 게시한 뉴스 목록 (금요일 총정리 재료)."""
+    """이번 주 월요일~어제 게시한 뉴스 목록 (토요일이면 월~금 5일치, 총정리 재료)."""
     now = datetime.now(KST).date()
     items = []
     for i in range(now.weekday(), 0, -1):

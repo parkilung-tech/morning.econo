@@ -2,7 +2,8 @@ name: daily-post
 
 on:
   schedule:
-    - cron: "52 21 * * *"   # 매일 한국시간 오전 6:52 (UTC 21:52)
+    - cron: "52 21 * * 0-4,6"   # 한국시간 월~금·일 오전 6:52 (UTC 전날 21:52)
+    - cron: "23 0 * * 6"        # 한국시간 토요일 오전 9:23 '이번 주 총정리' (UTC 00:23)
   workflow_dispatch:         # Actions 탭에서 수동 실행 버튼
 
 permissions:
