@@ -95,6 +95,7 @@ extra_days_off: {}
 
 # ===== 릴스 =====
 reel_enabled: true          # false로 바꾸면 릴스는 안 올림
+reel_style: "v2"            # "v2" = 뉴스 1개를 큰 글씨 컷으로(점심·저녁 릴스) / "cards" = 예전처럼 카드 넘기기
 reel_seconds_per_card: 3    # 카드 한 장당 보여줄 초
 reel_bgm_dir: "assets/bgm"  # 저작권 없는 음원(mp3)을 넣는 폴더. 비어 있으면 무음
 reel_share_to_feed: false   # true면 피드 그리드에도 노출 (카드뉴스와 겹쳐 보임)

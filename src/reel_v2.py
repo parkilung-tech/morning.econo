@@ -5,7 +5,7 @@ v2는 화면마다 한 줄(큰 글씨)만 보여주고, 글자가 튀어나오�
 
 beats 예시 (Claude가 생성하거나 직접 써도 됨):
 [
-  {"type": "drop", "kicker": "11.05 · 증시", "big": "닛케이", "number": "−3,000엔"},
+  {"type": "drop", "kicker": "11.05 · 증시", "big": "닛케이", "number": "−3,000엔", "direction": "down"},
   {"type": "text", "kicker": "왜?", "big": "美 민주당 압승\n소식에 급락"},
   {"type": "question", "big": "내 일본 펀드는\n괜찮을까?"},
   {"type": "action", "kicker": "오늘 할 일", "big": "평가액 한 번\n확인해 보세요"},
@@ -26,7 +26,7 @@ W, H, FPS = 1080, 1920, 30
 PAD = 96
 SAFE_TOP, SAFE_BOTTOM = 300, 1440   # 릴스 UI(위 버튼, 아래 캡션)에 안 가리는 영역
 DUR = {"drop": 2.4, "text": 2.0, "question": 2.0, "action": 2.2, "outro": 1.8}
-DOWN = "#FF5A5F"
+UP, DOWN = "#FF5A5F", "#4C9BFF"   # 한국 증시 관례: 상승 빨강, 하락 파랑
 
 
 def _ease_out(t):
@@ -52,6 +52,13 @@ class Stage:
         self.bg, self.card, self.accent = th["background"], th["card"], th["accent"]
         self.text, self.sub = th["text"], th["subtext"]
         self._cache = {}
+
+    def fit(self, text, size, color, max_w=W - 2 * PAD, min_size=90):
+        """한 줄로 들어갈 때까지 글자 크기를 줄임 (숫자·이름처럼 줄바꿈하면 안 되는 것)."""
+        probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+        while size > min_size and probe.textlength(text, font=self.p.font(size)) > max_w:
+            size -= 6
+        return self.layer(text, size, color, max_w=10_000)
 
     def layer(self, text, size, color, max_w=W - 2 * PAD, bold=True, spacing=1.16):
         key = (text, size, color, max_w, bold)
@@ -111,13 +118,17 @@ def _kicker(st, img, text, t, y):
 def beat_drop(st, img, b, t, dur):
     """큰 이름 → 하락 그래프가 그려지고 → 숫자가 쾅 찍힘(살짝 흔들림)."""
     _kicker(st, img, b.get("kicker"), t, SAFE_TOP + 130)
-    big = st.layer(b["big"], 150, st.text)
+    big = st.fit(b["big"], 150, st.text)
+    up = b.get("direction") == "up"
+    move = UP if up else DOWN
     k = _back(t / 0.35)
     st.put(img, big, PAD, SAFE_TOP + 220, alpha=min(1, t / 0.15), scale=0.85 + 0.15 * k)
 
     # 그래프: 오르락내리락 하다 마지막에 급락
     gx0, gx1, gy0 = PAD, W - PAD, SAFE_TOP + 500
     pts = [(0, .55), (.12, .45), (.25, .5), (.38, .35), (.5, .42), (.62, .3), (.72, .36), (.8, .32), (1, .95)]
+    if up:  # 오를 땐 마지막에 치솟는 모양
+        pts = [(x, 1.0 - y) for x, y in pts]
     draw_k = _ease_out((t - 0.25) / 0.9)
     if draw_k > 0:
         d = ImageDraw.Draw(img)
@@ -132,7 +143,7 @@ def beat_drop(st, img, b, t, dur):
                 r = (end_x - xs[i - 1]) / (xs[i] - xs[i - 1])
                 line.append((end_x, ys[i - 1] + (ys[i] - ys[i - 1]) * r))
                 break
-        col = DOWN if draw_k > 0.8 else st.sub
+        col = move if draw_k > 0.8 else st.sub
         d.line(line, fill=_hex(col), width=14, joint="curve")
         cx, cy = line[-1]
         d.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=_hex(col))
@@ -140,7 +151,7 @@ def beat_drop(st, img, b, t, dur):
     # 숫자 쾅
     tn = t - 1.15
     if tn > 0:
-        num = st.layer(b["number"], 210, DOWN)
+        num = st.fit(b["number"], 210, move)
         k = _back(tn / 0.3)
         shake = 14 * math.sin(tn * 70) * max(0, 1 - tn / 0.35)
         st.put(img, num, W / 2 + shake, SAFE_TOP + 1060, alpha=min(1, tn / 0.08),
@@ -191,7 +202,7 @@ def beat_action(st, img, b, t, dur):
 
 
 def beat_outro(st, img, b, t, dur):
-    lines = [("매일 아침 7시", 76, st.sub), ("출근길 경제 한 잔", 112, st.text)]
+    lines = [("매일 아침 7시", 76, st.sub), (st.p.brand, 112, st.text)]
     y = SAFE_TOP + 480
     for i, (txt, size, col) in enumerate(lines):
         lay = st.layer(txt, size, col)
@@ -256,7 +267,7 @@ if __name__ == "__main__":  # 샘플: python -m src.reel_v2
     import yaml
     cfg = yaml.safe_load(open("config.yaml", encoding="utf-8"))
     sample = [
-        {"type": "drop", "kicker": "11.05 · 증시", "big": "닛케이", "number": "−3,000엔"},
+        {"type": "drop", "kicker": "11.05 · 증시", "big": "닛케이", "number": "−3,000엔", "direction": "down"},
         {"type": "text", "kicker": "왜?", "big": "美 민주당 압승\n소식에 급락"},
         {"type": "question", "big": "내 일본 펀드는\n괜찮을까?"},
         {"type": "action", "kicker": "오늘 할 일", "big": "일본 주식·펀드\n평가액 한 번\n확인해 보세요"},

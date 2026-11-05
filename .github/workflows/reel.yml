@@ -25,6 +25,8 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: 릴스 영상 만들기
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python main.py reel-build
 
       - name: 릴스 영상 업로드 (공개 주소 만들기)

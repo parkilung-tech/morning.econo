@@ -161,7 +161,28 @@ def reel_build():
     images = [OUT / name for name in post["images"]]
     # 첫 장면 색을 카드와 똑같이 맞추려고, 카드를 만든 날짜로 요일 색을 고름
     day = datetime.strptime(OUT.name, "%Y-%m-%d").date()  # output/날짜 폴더 = 카드 만든 날
+    if _reel_v2(post, lambda rs: rs.news_from_item(post["items"][0]), OUT / "reel.mp4", day):
+        (OUT / "post.json").write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
+        return
     make_reel(CFG, images, OUT / "reel.mp4", day, post)
+
+
+def _reel_v2(post: dict, news, out: Path, day) -> bool:
+    """뉴스 1개 큰 글씨 릴스(v2). 실패하면 False → 예전 방식으로 대신 만듦."""
+    if CFG.get("reel_style", "v2") != "v2":
+        return False
+    from src import reel_script as rs
+    from src.dayoff import is_day_off
+    from src.reel_v2 import make_reel_v2
+    try:
+        if not post.get("reel_beats"):  # 다시 실행해도 같은 대본 사용 (API 재호출 X)
+            post["reel_beats"] = rs.write_beats(CFG, news(rs), day, is_day_off(day, CFG))
+        print("릴스 대본:", json.dumps(post["reel_beats"], ensure_ascii=False))
+        make_reel_v2(CFG, post["reel_beats"], out, day)
+        return True
+    except Exception as e:  # 대본·영상 실패해도 게시는 되게
+        print(f"::warning::릴스 v2 실패, 예전 방식으로 만듦: {e}")
+        return False
 
 
 def reel_publish():
@@ -211,8 +232,9 @@ def evening_build():
     post["caption_full"] = evening.caption(post)
     if evening_as_reel():  # 피드는 아침 카드뉴스 하루 1개만 → 저녁은 릴스로
         from src.reel import make_evening_reel
-        make_evening_reel(CFG, OUT / "evening.jpg", post, evening.theme(CFG), OUT / "evening.mp4",
-                          datetime.now(KST).date())
+        day = datetime.now(KST).date()
+        if not _reel_v2(post, lambda rs: rs.news_from_evening(post), OUT / "evening.mp4", day):
+            make_evening_reel(CFG, OUT / "evening.jpg", post, evening.theme(CFG), OUT / "evening.mp4", day)
         post["format"] = "reel"
     path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"저녁 이슈: {post['title']} → {OUT / 'evening.jpg'}")
