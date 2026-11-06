@@ -161,10 +161,73 @@ def reel_build():
     images = [OUT / name for name in post["images"]]
     # 첫 장면 색을 카드와 똑같이 맞추려고, 카드를 만든 날짜로 요일 색을 고름
     day = datetime.strptime(OUT.name, "%Y-%m-%d").date()  # output/날짜 폴더 = 카드 만든 날
+    if not post.get("reel_beats"):
+        _pick_fresh_reel_beats(post, day)
     if _reel_v2(post, lambda rs: rs.news_from_item(post["items"][0]), OUT / "reel.mp4", day):
         (OUT / "post.json").write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
         return
     make_reel(CFG, images, OUT / "reel.mp4", day, post)
+
+
+def _beats_text(beats) -> str:
+    import re
+    parts = []
+    for b in beats or []:
+        parts += [str(b.get(k, "")) for k in ("big", "number")]
+    return re.sub(r"\s+", "", " ".join(parts))
+
+
+def _recent_reel_beats(day, days: int = 7) -> list[list[dict]]:
+    """최근 며칠간 실제로 만든 릴스(점심·저녁) 대본들."""
+    out = []
+    for i in range(1, days + 1):
+        folder = Path("output") / (day - timedelta(days=i)).isoformat()
+        for name in ("post.json", "evening.json"):
+            f = folder / name
+            if f.exists():
+                beats = json.loads(f.read_text(encoding="utf-8")).get("reel_beats")
+                if beats:
+                    out.append(beats)
+    return out
+
+
+def _is_repeat(beats, recent) -> bool:
+    """첫 컷(제목·숫자)이 같거나 대본 글자가 절반 이상 겹치면 '같은 릴스'로 봄."""
+    def key(b):
+        first = (b or [{}])[0]
+        return (str(first.get("big", "")).replace("\n", "").replace(" ", ""), str(first.get("number", "")))
+    def bigrams(t):
+        return {t[i:i + 2] for i in range(len(t) - 1)}
+    a = bigrams(_beats_text(beats))
+    for old in recent:
+        if key(beats)[0] and key(beats) == key(old):
+            return True
+        b = bigrams(_beats_text(old))
+        if a and b and len(a & b) / min(len(a), len(b)) >= 0.5:
+            return True
+    return False
+
+
+def _pick_fresh_reel_beats(post: dict, day) -> None:
+    """점심 릴스 소재가 최근 릴스와 겹치면 다음 뉴스로 바꿔 대본을 만듦 (총정리 날 재탕 방지)."""
+    if CFG.get("reel_style", "v2") != "v2" or not post.get("items"):
+        return
+    from src import reel_script as rs
+    from src.dayoff import is_day_off
+    recent = _recent_reel_beats(day)
+    for idx, item in enumerate(post["items"][:3]):
+        try:
+            beats = rs.write_beats(CFG, rs.news_from_item(item), day, is_day_off(day, CFG))
+        except Exception as e:
+            print(f"::warning::릴스 대본 실패({idx + 1}번 뉴스): {e}")
+            return
+        if not _is_repeat(beats, recent):
+            post["reel_beats"], post["reel_item"] = beats, idx
+            if idx:
+                print(f"최근 릴스와 겹쳐서 {idx + 1}번 뉴스로 릴스를 만듦: {item.get('headline')}")
+            return
+        print(f"[중복] {idx + 1}번 뉴스는 최근 릴스와 같음 → 다음 뉴스로")
+    print("::warning::상위 3개 뉴스가 모두 최근 릴스와 겹쳐 1번 뉴스로 만듦")
 
 
 def _reel_v2(post: dict, news, out: Path, day) -> bool:
