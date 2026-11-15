@@ -73,5 +73,30 @@
     "card_06.jpg",
     "card_07.jpg"
   ],
-  "published_id": "18222251704342631"
+  "published_id": "18222251704342631",
+  "reel_beats": [
+    {
+      "type": "text",
+      "big": "내 일이\n수출입과\n닿아 있다면",
+      "kicker": "11.15 · 무역"
+    },
+    {
+      "type": "text",
+      "big": "APEC 최대\n관전 포인트가\n미중 휴전",
+      "kicker": "왜?"
+    },
+    {
+      "type": "question",
+      "big": "내 일터는\n수출입과\n닿아 있을까?"
+    },
+    {
+      "type": "action",
+      "big": "업계 뉴스\n하나 저장\n해두기",
+      "kicker": "오늘 할 일"
+    },
+    {
+      "type": "outro"
+    }
+  ],
+  "reel_item": 0
 }
