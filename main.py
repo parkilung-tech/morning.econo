@@ -87,6 +87,31 @@ def build():
     print(f"카드 {len(paths)}장 생성 → {OUT}")
 
 
+def _verified_image_urls(names: list[str]) -> list[str]:
+    """카드 이미지 공개 주소를 만들고, 인스타에 넘기기 전에 '끝까지 다 받아지는지' 확인.
+    2026-11-18: raw.githubusercontent에서 6페이지가 중간까지만 받아져 아래가 회색으로 게시됨.
+    → 커밋 번호를 고정한 jsDelivr 주소를 쓰고, 실제로 내려받은 파일이 내 파일과 바이트까지 같을 때만 통과."""
+    import subprocess
+    repo = os.environ["GITHUB_REPOSITORY"]
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    urls = [f"https://cdn.jsdelivr.net/gh/{repo}@{sha}/output/{TODAY}/{n}" for n in names]
+    for name, url in zip(names, urls):
+        local = (OUT / name).read_bytes()
+        for _ in range(12):
+            try:
+                r = requests.get(url, timeout=30)
+                if r.status_code == 200 and r.content == local:
+                    break
+                print(f"확인 실패({r.status_code}, {len(r.content)}/{len(local)}바이트): {url}")
+            except requests.RequestException as e:
+                print(f"확인 오류: {e}")
+            time.sleep(10)
+        else:
+            raise RuntimeError(f"이미지가 온전히 받아지지 않음: {url}")
+    print(f"이미지 {len(urls)}장 확인 완료 ({sha[:7]})")
+    return urls
+
+
 def publish():
     from src.publish import Instagram
 
@@ -95,17 +120,7 @@ def publish():
     if post.get("published_id") and not force:
         print("이미 게시됨, 건너뜀")
         return
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    base = CFG["image_base_url"].format(repo=repo).rstrip("/")
-    urls = [f"{base}/{TODAY}/{name}" for name in post["images"]]
-    # 이미지 주소가 실제로 열리는지 확인 (푸시 직후 반영 지연 대비)
-    for _ in range(12):
-        if all(requests.head(u, timeout=15).status_code == 200 for u in urls):
-            break
-        time.sleep(10)
-    else:
-        raise RuntimeError(f"이미지 주소 접근 불가: {urls[0]}")
-
+    urls = _verified_image_urls(post["images"])
     ig = Instagram(CFG["graph_api_version"])
     media_id = ig.publish_carousel(urls, post["caption_full"])
     post["published_id"] = media_id
@@ -357,9 +372,7 @@ def threads(dry_run: bool = False):
         return
     urls = None
     if CFG.get("threads_attach_cards", False):
-        repo = os.environ.get("GITHUB_REPOSITORY", "")
-        base = CFG["image_base_url"].format(repo=repo).rstrip("/")
-        urls = [f"{base}/{TODAY}/{name}" for name in post["images"]]
+        urls = _verified_image_urls(post["images"])
     post["threads_id"] = th.Threads().publish(text, urls)
     post["threads_text"] = text
     path.write_text(json.dumps(post, ensure_ascii=False, indent=2), encoding="utf-8")
